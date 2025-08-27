@@ -103,6 +103,7 @@ if ($test) {
           -configuration $configuration `
           -verbosity $verbosity `
           -ci:$ci `
+          -projects src\SOS\SOS.UnitTests\SOS.UnitTests.csproj `
           /bl:$logdir\Test.binlog `
           /p:TargetOS=$os `
           /p:TargetArch=$architecture `
@@ -111,7 +112,7 @@ if ($test) {
           /p:DotnetRuntimeDownloadVersion="$dotnetruntimedownloadversion" `
           /p:RuntimeSourceFeed="$runtimesourcefeed" `
           /p:RuntimeSourceFeedKey="$runtimesourcefeedkey" `
-          /p:LiveRuntimeDir="$liveRuntimeDir" 
+          /p:LiveRuntimeDir="$liveRuntimeDir"
 
         if ($lastExitCode -ne 0) {
             exit $lastExitCode

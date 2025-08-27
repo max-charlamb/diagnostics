@@ -208,7 +208,7 @@ public class SOS
             throw new SkipTestException("This test validates SoftwareExceptionFrame handling, before .NET10, these aren't used in this debuggee scenario.");
         }
 
-        SOSTestHelpers.SkipIfWinX86(config);
+        // SOSTestHelpers.SkipIfWinX86(config);
 
         await SOSTestHelpers.RunTest(
             config,
@@ -222,7 +222,7 @@ public class SOS
     [SkippableTheory, MemberData(nameof(Configurations)), Trait("Category", "CDACCompatible")]
     public async Task StackTraceFaultingExceptionFrame(TestConfiguration config)
     {
-        SOSTestHelpers.SkipIfWinX86(config);
+        // SOSTestHelpers.SkipIfWinX86(config);
 
         await SOSTestHelpers.RunTest(
             config,
@@ -328,7 +328,7 @@ public class SOS
             testTriage: true);
     }
 
-    [SkippableTheory, MemberData(nameof(Configurations))]
+    [SkippableTheory, MemberData(nameof(Configurations)), Trait("Category", "Test")]
     public async Task NestedExceptionTest(TestConfiguration config)
     {
         await SOSTestHelpers.RunTest(

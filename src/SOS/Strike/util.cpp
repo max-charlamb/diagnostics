@@ -688,7 +688,7 @@ HRESULT GetThreadStaticFieldPTR(DWORD_PTR* pOutPtr, CLRDATA_ADDRESS cdaThread, D
             ExtOut("GetThreadStaticBaseAddress failed");
             return hr;
         }
-
+    
         if (pBase != 0)
         {
             if (pFlags)

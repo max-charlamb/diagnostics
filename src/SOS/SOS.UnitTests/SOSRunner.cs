@@ -407,6 +407,23 @@ public class SOSRunner : IDisposable
 
                         // Wait until dotnet-dump collect finishes generating the dump
                         await dotnetDumpRunner.WaitForExit();
+
+                        StringBuilder dotnetDumpArguments2 = new();
+                        dotnetDumpArguments2.Append(config.DotNetDumpPath());
+                        dotnetDumpArguments2.AppendFormat($" collect --process-id {processRunner.ProcessId} --output {dumpName}2 --type full");
+                        if (information.DumpDiagnostics)
+                        {
+                            dotnetDumpArguments2.Append(" --diag");
+                        }
+                        ProcessRunner dotnetDumpRunner2 = new ProcessRunner(config.DotNetDumpHost(), ReplaceVariables(variables, dotnetDumpArguments2.ToString())).
+                            WithLog(new TestRunner.TestLogger(dotnetDumpOutputHelper)).
+                            WithTimeout(TimeSpan.FromMinutes(10)).
+                            WithExpectedExitCode(0);
+
+                        dotnetDumpRunner2.Start();
+
+                        // Wait until dotnet-dump collect finishes generating the dump
+                        await dotnetDumpRunner2.WaitForExit();
                     }
                     catch (Exception ex)
                     {
@@ -815,6 +832,10 @@ public class SOSRunner : IDisposable
                     else if (line.StartsWith("CONTINUE"))
                     {
                         await ContinueExecution();
+                    }
+                    else if (line.StartsWith("DUMP"))
+                    {
+                        await RunCommand(".dump -mfa -o C:\\Users\\maxcharlamb\\temp\\test.dmp");
                     }
                     // Adds the "!" prefix under dbgeng, nothing under lldb. Meant for SOS (native) commands.
                     else if (line.StartsWith("SOSCOMMAND:"))

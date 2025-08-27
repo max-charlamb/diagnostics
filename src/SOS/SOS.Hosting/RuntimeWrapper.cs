@@ -134,7 +134,9 @@ namespace SOS.Hosting
 
         void IDisposable.Dispose()
         {
-            Trace.TraceInformation("RuntimeWrapper.Dispose");
+            AddRef();
+            int refCount = Release();
+            Trace.TraceInformation($"RuntimeWrapper.Dispose with refcount = {refCount - 1}");
             this.ReleaseWithCheck();
         }
 
@@ -534,7 +536,7 @@ namespace SOS.Hosting
         private IntPtr GetDacHandle(bool useCDac)
         {
             bool verifySignature = false;
-            string dacFilePath = useCDac ? _runtime.GetCDacFilePath() : _runtime.GetDacFilePath(out verifySignature);
+            string dacFilePath = useCDac ? _runtime.GetCDacFilePath() : _runtime.GetDacFilePath(out _);
             if (dacFilePath == null)
             {
                 Trace.TraceError($"Could not find matching DAC {dacFilePath ?? ""} {useCDac} for this runtime: {_runtime.RuntimeModule.FileName}");
