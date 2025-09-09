@@ -5,8 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
+using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.TestHelpers;
 using Newtonsoft.Json;
 using Xunit;
@@ -22,6 +25,65 @@ public static class SOSTestHelpers
     public static IEnumerable<object[]> GetConfigurations(string key, string value)
     {
         return TestRunConfiguration.Instance.Configurations.Where((c) => key == null || c.AllSettings.GetValueOrDefault(key) == value).DefaultIfEmpty(TestConfiguration.Empty).Select(c => new[] { c });
+    }
+
+    public static IEnumerable<object[]> GetGCConfigurations()
+    {
+        IEnumerable<TestConfiguration> inputConfigurations = TestRunConfiguration.Instance.Configurations
+            // Filter out configurations for specific tests
+            .Where(c => c.AllSettings.GetValueOrDefault("TestName") == null)
+            // Filter for only .NET core configurations
+            .Where(c => c.IsNETCore)
+            // Filter out single file scenarios
+            .Where(c => !c.PublishSingleFile);
+
+        // Run tests on both server and workstation modes
+        TestConfigurationOption gcServer = new()
+        {
+            Name = "GCServer",
+            Values = ["0", "1"],
+        };
+
+        TestConfigurationOption gcName = new()
+        {
+            Name = "GCName",
+            Values = [string.Empty /*default*/, "clrgc.dll"],
+        };
+
+        return AddOptions(inputConfigurations, [gcServer, gcName]).Select(c => new[] { c });
+    }
+    private class TestConfigurationOption
+    {
+        public string Name { get; init; }
+        public IEnumerable<string> Values { get; init; }
+    }
+
+    private static IEnumerable<TestConfiguration> AddOptions(IEnumerable<TestConfiguration> inputConfigurations, IEnumerable<TestConfigurationOption> options)
+    {
+        TestConfiguration AddSetting(TestConfiguration inputConfiguration, string key, string value)
+        {
+            Dictionary<string, string> settings = new(inputConfiguration.AllSettings);
+            settings.Add(key, value);
+            return new TestConfiguration(settings);
+        }
+
+        IEnumerable<TestConfiguration> AddOption(IEnumerable<TestConfiguration> inputConfigurations, TestConfigurationOption option)
+        {
+            IEnumerable<TestConfiguration> outputConfigurations = [];
+            foreach (string value in option.Values)
+            {
+                outputConfigurations = outputConfigurations.Concat(inputConfigurations.Select(c => AddSetting(c, option.Name, value)));
+            }
+            return outputConfigurations;
+        }
+
+        IEnumerable<TestConfiguration> acc = inputConfigurations;
+        foreach (TestConfigurationOption option in options)
+        {
+            acc = AddOption(acc, option);
+        }
+
+        return acc;
     }
 
     internal static void SkipIfArm(TestConfiguration config)
@@ -200,7 +262,7 @@ public class SOS
 
     public static IEnumerable<object[]> Configurations => SOSTestHelpers.GetConfigurations("TestName", value: null);
 
-    [SkippableTheory, MemberData(nameof(SOSTestHelpers.GetConfigurations), "TestName", "GC", MemberType = typeof(SOSTestHelpers))]
+    [SkippableTheory, MemberData(nameof(SOSTestHelpers.GetGCConfigurations), MemberType = typeof(SOSTestHelpers))]
     public async Task FindRootsOlderGeneration(TestConfiguration config)
     {
         if (OS.Kind != OSKind.Windows)
@@ -217,7 +279,7 @@ public class SOS
                 testDump: false);
     }
 
-    [SkippableTheory, MemberData(nameof(SOSTestHelpers.GetConfigurations), "TestName", "GC", MemberType = typeof(SOSTestHelpers))]
+    [SkippableTheory, MemberData(nameof(SOSTestHelpers.GetGCConfigurations), MemberType = typeof(SOSTestHelpers))]
     public async Task DumpGCData(TestConfiguration config)
     {
         await SOSTestHelpers.RunTest(
