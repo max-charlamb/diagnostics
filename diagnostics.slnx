@@ -354,6 +354,10 @@
       <BuildType Solution="Checked|*" Project="Debug" />
       <BuildType Solution="RelWithDebInfo|*" Project="Release" />
     </Project>
+    <Project Path="src/tests/HelixRunner/HelixRunner.csproj">
+      <BuildType Solution="Checked|*" Project="Debug" />
+      <BuildType Solution="RelWithDebInfo|*" Project="Release" />
+    </Project>
     <Project Path="src/tests/DbgShim.UnitTests/DbgShim.UnitTests.csproj">
       <BuildType Solution="Checked|*" Project="Debug" />
       <BuildType Solution="RelWithDebInfo|*" Project="Release" />

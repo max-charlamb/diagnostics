@@ -99,6 +99,7 @@ if ($test) {
             $env:SOS_TEST_CDAC="true"
         }
         & "$engroot\common\build.ps1" `
+          -projects src\SOS\SOS.UnitTests\SOS.UnitTests.csproj `
           -test `
           -configuration $configuration `
           -verbosity $verbosity `
