@@ -73,4 +73,13 @@
       DestinationFolder="$(OutputPath)/../Scripts/%(RecursiveDir)"
       SkipUnchangedFiles="false" />
   </Target>
+
+  <Target Name="_ApplyTestCategoryFilter" 
+          BeforeTargets="RunTests">
+    <ItemGroup>
+      <TestToRun Include="@(TestToRun)">
+        <TestRunnerAdditionalArguments>-method *StackAndOther*</TestRunnerAdditionalArguments>
+      </TestToRun>
+    </ItemGroup>
+  </Target>
 </Project>

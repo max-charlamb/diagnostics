@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.Build.NoTargets">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <XunitWrapperScript Condition="'$(OS)' == 'Windows_NT'" Include="Windows/runtests.ps1" />
+    <XunitWrapperScript Condition="$(OS) == 'Unix'" Include="Unix/runtests.sh" />
+  </ItemGroup>
+
+  <Target Name="CopyXunitWrapperScripts" BeforeTargets="PrepareForRun">
+    <Message Text="Copy xunit wrapper scripts" />
+    <Copy SourceFiles="@(XunitWrapperScript)"
+      DestinationFolder="$(OutputPath)"
+      SkipUnchangedFiles="true">
+      <Output TaskParameter="CopiedFiles" ItemName="FileWrites" />
+    </Copy>
+  </Target>
+
+  <Target Name="CopyXunitConsole" BeforeTargets="PrepareForRun">
+    <Message Text="Copy xUnit console to $(OutputPath)" />
+    <ItemGroup>
+      <XUnitConsoleFiles Include="$(Pkgxunit_runner_console)/tools/netcoreapp2.0/*" Exclude="$(Pkgxunit_runner_console)/tools/netcoreapp2.0/xunit.abstractions.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(XUnitConsoleFiles)"
+      DestinationFolder="$(OutputPath)"
+      SkipUnchangedFiles="false" />
+  </Target>
+</Project>
