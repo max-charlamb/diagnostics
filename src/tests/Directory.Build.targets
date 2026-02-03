@@ -8,12 +8,15 @@
   -->
   <Target Name="CopyDebuggeeSources" AfterTargets="Build" Condition="'$(CopyDebuggeeSourcesToArtifacts)' == 'true'">
     <PropertyGroup>
-      <DebuggeesDestDir>$(ArtifactsDir)test/DebuggeeSources/$(MSBuildProjectName)/Debuggees</DebuggeesDestDir>
+      <DebuggeesRootDir>$(ArtifactsDir)test/DebuggeeSources</DebuggeesRootDir>
+      <DebuggeesDestDir>$(DebuggeesRootDir)/$(MSBuildProjectName)/Debuggees</DebuggeesDestDir>
       <AuxMsbuildDestDir>$(ArtifactsDir)test/AuxMsbuildFiles</AuxMsbuildDestDir>
       <LldbPluginTestsDestDir>$(ArtifactsDir)test/lldbplugin.tests</LldbPluginTestsDestDir>
     </PropertyGroup>
     <ItemGroup>
-      <DebuggeeSourceFiles Include="$(MSBuildProjectDirectory)/Debuggees/**/*" />
+      <!-- Copy debuggee sources, excluding Directory.Build.props/targets (we use isolated versions) -->
+      <DebuggeeSourceFiles Include="$(MSBuildProjectDirectory)/Debuggees/**/*"
+                           Exclude="$(MSBuildProjectDirectory)/Debuggees/**/Directory.Build.props;$(MSBuildProjectDirectory)/Debuggees/**/Directory.Build.targets" />
       <AuxMsbuildFiles Include="$(RepoRoot)eng/AuxMsbuildFiles/**/*" />
       <LldbPluginTestFiles Include="$(TestDir)lldbplugin.tests/**/*" Condition="'$(CopyLldbPluginTests)' == 'true'" />
     </ItemGroup>
@@ -27,9 +30,39 @@
       DestinationFolder="$(LldbPluginTestsDestDir)/%(RecursiveDir)"
       SkipUnchangedFiles="true"
       Condition="'$(CopyLldbPluginTests)' == 'true'" />
+    <!-- Copy isolated Directory.Build.props/targets to DebuggeeSources root for build isolation -->
+    <Copy SourceFiles="$(RepoRoot)eng/AuxMsbuildFiles/Debuggees.Directory.Build.props"
+      DestinationFiles="$(DebuggeesRootDir)/Directory.Build.props"
+      SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(RepoRoot)eng/AuxMsbuildFiles/Debuggees.Directory.Build.targets"
+      DestinationFiles="$(DebuggeesRootDir)/Directory.Build.targets"
+      SkipUnchangedFiles="true" />
     <Message Importance="High" Text="Copied debuggee sources to $(DebuggeesDestDir)" />
     <Message Importance="High" Text="Copied aux MSBuild files to $(AuxMsbuildDestDir)" />
+    <Message Importance="High" Text="Copied isolated Directory.Build.props/targets to $(DebuggeesRootDir)" />
     <Message Importance="High" Text="Copied lldbplugin.tests to $(LldbPluginTestsDestDir)" Condition="'$(CopyLldbPluginTests)' == 'true'" />
   </Target>
 
+  <!--
+    Build debuggees from the artifacts directory using a separate MSBuild invocation.
+    This ensures complete isolation from the repo's Directory.Build.props.
+  -->
+  <Target Name="BuildDebuggees" AfterTargets="Build"
+          DependsOnTargets="CopyDebuggeeSources"
+          Condition="'$(CopyDebuggeeSourcesToArtifacts)' == 'true'">
+    <PropertyGroup>
+      <DebuggeesRootDir>$(ArtifactsDir)test/DebuggeeSources</DebuggeesRootDir>
+      <DebuggeesProjectDir>$(DebuggeesRootDir)/$(MSBuildProjectName)/Debuggees</DebuggeesProjectDir>
+    </PropertyGroup>
+    <!-- Find all debuggee csproj files -->
+    <ItemGroup>
+      <DebuggeeProjects Include="$(DebuggeesProjectDir)/**/*.csproj" />
+    </ItemGroup>
+    <Message Importance="High" Text="Building debuggees from $(DebuggeesProjectDir)" />
+    <!-- Build each debuggee project -->
+    <Exec Command="dotnet build &quot;%(DebuggeeProjects.Identity)&quot; --configuration $(Configuration)"
+          WorkingDirectory="$(DebuggeesRootDir)"
+          ConsoleToMSBuild="true"
+          Condition="'@(DebuggeeProjects)' != ''" />
+  </Target>
 </Project>

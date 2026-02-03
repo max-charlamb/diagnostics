@@ -1,0 +1,3 @@
+<Project>
+  <!-- Empty targets file to block parent Directory.Build.targets inheritance -->
+</Project>

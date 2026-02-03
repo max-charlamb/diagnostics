@@ -1,0 +1,6 @@
+<Project>
+  <!-- 
+    Isolated Directory.Build.targets for debuggee builds.
+    This file blocks any parent Directory.Build.targets imports.
+  -->
+</Project>

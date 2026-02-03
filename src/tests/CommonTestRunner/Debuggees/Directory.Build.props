@@ -1,4 +1,22 @@
 <Project>
-  <Import Project="$(MSBuildThisFileDirectory)..\..\Directory.Build.props"/>
-  <Import Project="$(RepoRoot)eng/AuxMsbuildFiles/SdkPackOverrides.targets"/>
+  <!--
+    Minimal Directory.Build.props for IDE IntelliSense support.
+    Actual debuggee builds happen from artifacts/test/DebuggeeSources/ with isolated props.
+  -->
+
+  <!-- Block parent Directory.Build.props inheritance for isolation -->
+  <PropertyGroup>
+    <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+    <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
+  </PropertyGroup>
+
+  <!-- Required properties for IDE IntelliSense -->
+  <PropertyGroup>
+    <SupportedSubProcessTargetFrameworks>net8.0;net9.0;net10.0</SupportedSubProcessTargetFrameworks>
+  </PropertyGroup>
+
+  <!-- Package versions for debuggees that need them -->
+  <PropertyGroup>
+    <MicrosoftExtensionsLoggingEventSourceVersion>5.0.1</MicrosoftExtensionsLoggingEventSourceVersion>
+  </PropertyGroup>
 </Project>

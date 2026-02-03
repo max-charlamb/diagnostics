@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <Compile Remove="Debuggees\SimpleDebuggee\SimpleDebuggee.cs" />
+    <Compile Remove="Debuggees\**\obj\**" />
+    <Compile Remove="Debuggees\**\bin\**" />
   </ItemGroup>
 
   <ItemGroup>
