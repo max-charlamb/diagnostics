@@ -11,6 +11,11 @@
        <AspNetVersion90>@(RuntimeTestVersions->WithMetadataValue('TargetFramework', 'net9.0')->Metadata('AspNet'))</AspNetVersion90>
        <AspNetVersion10>@(RuntimeTestVersions->WithMetadataValue('TargetFramework', 'net10.0')->Metadata('AspNet'))</AspNetVersion10>
        <AspNetVersion11>@(RuntimeTestVersions->WithMetadataValue('TargetFramework', 'net11.0')->Metadata('AspNet'))</AspNetVersion11>
+
+       <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net8.0' and '$(RuntimeVersion80)' != ''">$(RuntimeVersion80)</RuntimeFrameworkVersion>
+       <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net9.0' and '$(RuntimeVersion90)' != ''">$(RuntimeVersion90)</RuntimeFrameworkVersion>
+       <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net10.0' and '$(RuntimeVersion10)' != ''">$(RuntimeVersion10)</RuntimeFrameworkVersion>
+       <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net11.0' and '$(RuntimeVersion11)' != ''">$(RuntimeVersion11)</RuntimeFrameworkVersion>
     </PropertyGroup>
 
     <Message Importance="Low" Text="OverrideTestingVersions: RuntimeTestVersions=@(RuntimeTestVersions -> '%(Runtime)')" />
