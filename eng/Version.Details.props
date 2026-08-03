@@ -23,12 +23,12 @@ This file should be imported by eng/Versions.props
     <MicrosoftNETSdkPackageVersion>11.0.100-preview.7.26327.102</MicrosoftNETSdkPackageVersion>
     <MicrosoftNETCoreAppRefPackageVersion>11.0.0-preview.7.26327.102</MicrosoftNETCoreAppRefPackageVersion>
     <MicrosoftNETCorePlatformsPackageVersion>11.0.0-preview.7.26327.102</MicrosoftNETCorePlatformsPackageVersion>
-    <runtimelinuxarm64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-preview.7.26327.102</runtimelinuxarm64MicrosoftDotNetCdacTransportPackageVersion>
-    <runtimelinuxx64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-preview.7.26327.102</runtimelinuxx64MicrosoftDotNetCdacTransportPackageVersion>
-    <runtimeosxarm64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-preview.7.26327.102</runtimeosxarm64MicrosoftDotNetCdacTransportPackageVersion>
-    <runtimeosxx64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-preview.7.26327.102</runtimeosxx64MicrosoftDotNetCdacTransportPackageVersion>
-    <runtimewinarm64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-preview.7.26327.102</runtimewinarm64MicrosoftDotNetCdacTransportPackageVersion>
-    <runtimewinx64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-preview.7.26327.102</runtimewinx64MicrosoftDotNetCdacTransportPackageVersion>
+    <runtimelinuxarm64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-rc.1.26402.102</runtimelinuxarm64MicrosoftDotNetCdacTransportPackageVersion>
+    <runtimelinuxx64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-rc.1.26402.102</runtimelinuxx64MicrosoftDotNetCdacTransportPackageVersion>
+    <runtimeosxarm64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-rc.1.26402.102</runtimeosxarm64MicrosoftDotNetCdacTransportPackageVersion>
+    <runtimeosxx64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-rc.1.26402.102</runtimeosxx64MicrosoftDotNetCdacTransportPackageVersion>
+    <runtimewinarm64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-rc.1.26402.102</runtimewinarm64MicrosoftDotNetCdacTransportPackageVersion>
+    <runtimewinx64MicrosoftDotNetCdacTransportPackageVersion>11.0.0-rc.1.26402.102</runtimewinx64MicrosoftDotNetCdacTransportPackageVersion>
     <!-- microsoft-clrmd dependencies -->
     <MicrosoftDiagnosticsRuntimePackageVersion>4.1.736701</MicrosoftDiagnosticsRuntimePackageVersion>
     <MicrosoftDiagnosticsRuntimeUtilitiesPackageVersion>4.1.736701</MicrosoftDiagnosticsRuntimeUtilitiesPackageVersion>
