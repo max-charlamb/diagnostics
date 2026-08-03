@@ -108,10 +108,12 @@ SOSCOMMAND:DumpMD <PREVPOUT>
 VERIFY:.*\s+Method Name:\s+SymbolTestApp\.Program\.Foo1\(Int32, System\.String\)\s+
 
 # Verify that the cDAC GCInfo path precisely matches the legacy decoder.
+IFDEF:MAJOR_RUNTIME_VERSION_GE_11
 SOSCOMMAND:GCInfo <PREVPOUT>
 SAVE_OUTPUT:GCInfo
 SOSCOMMAND:GCInfo -legacy <PREVPOUT>
 COMPARE_OUTPUT:GCInfo
+ENDIF:MAJOR_RUNTIME_VERSION_GE_11
 
 # Restore DumpMD output for DumpClass's POUT capture.
 SOSCOMMAND:DumpMD <PREVPOUT>

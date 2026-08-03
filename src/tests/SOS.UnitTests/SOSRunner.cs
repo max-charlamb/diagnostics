@@ -994,9 +994,13 @@ public class SOSRunner : IDisposable
                         {
                             throw new Exception("COMPARE_OUTPUT: no saved output named " + name);
                         }
-                        if (_lastCommandOutput == null || !string.Equals(savedOutput, _lastCommandOutput, StringComparison.Ordinal))
+                        string actualOutput = _lastCommandOutput;
+                        if (actualOutput == null || !string.Equals(RemoveCommandEcho(savedOutput), RemoveCommandEcho(actualOutput), StringComparison.Ordinal))
                         {
-                            throw new Exception("Debugger output did not match saved output: " + name);
+                            throw new Exception(
+                                "Debugger output did not match saved output: " + name + Environment.NewLine +
+                                "Saved output:" + Environment.NewLine + savedOutput + Environment.NewLine +
+                                "Actual output:" + Environment.NewLine + actualOutput);
                         }
                     }
                     else
@@ -1042,6 +1046,17 @@ public class SOSRunner : IDisposable
         {
             WriteLine("[TIMING] RunScript({0}) completed in {1:F1}s", scriptRelativePath, scriptSw.Elapsed.TotalSeconds);
         }
+    }
+
+    private static string RemoveCommandEcho(string output)
+    {
+        int lineEnd = output.IndexOf('\n');
+        if (lineEnd >= 0 && output.AsSpan(0, lineEnd).TrimStart().StartsWith(">"))
+        {
+            return output.Substring(lineEnd + 1);
+        }
+
+        return output;
     }
 
     public async Task LoadSosExtension()
