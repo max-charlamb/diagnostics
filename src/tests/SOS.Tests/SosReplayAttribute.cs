@@ -27,15 +27,8 @@ namespace SOS.Tests;
 public sealed class SosReplayAttribute : BeforeAfterTestAttribute
 {
     private static readonly string s_runDirectory = Path.Combine(
-        ResolveReplayDirectory(
-            Environment.GetEnvironmentVariable(HostDiagnostics.UploadRootVariable),
-            RepoLayout.Root),
+        RepoLayout.ReplayDirectory,
         $"{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Environment.ProcessId}");
-
-    internal static string ResolveReplayDirectory(string? uploadRoot, string repoRoot) =>
-        string.IsNullOrEmpty(uploadRoot)
-            ? Path.Combine(repoRoot, "artifacts", "TestResults", "SOS.Tests")
-            : Path.Combine(uploadRoot, "SOS-replays");
 
     public override void After(MethodInfo methodUnderTest, IXunitTest test)
     {
@@ -83,7 +76,7 @@ internal static class ReplayRenderer
         sb.AppendLine($"# result:  {state.Result}");
         sb.AppendLine($"# config:  {replay.Config}");
         sb.AppendLine($"# crash dump dir: {HostDiagnostics.CrashDumpDirectory}");
-        sb.AppendLine($"# lldb trace:     {Environment.GetEnvironmentVariable("SOSHARNESS_LLDB_TRACE") ?? "<unset>"}");
+        sb.AppendLine($"# lldb trace:     {RepoLayout.LldbTraceFile ?? "<unset>"}");
         sb.AppendLine("# ───────────────────────────────────────────────────────────────────────────");
 
         AppendFailure(sb, state);

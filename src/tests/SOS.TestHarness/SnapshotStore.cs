@@ -88,7 +88,7 @@ public static class SnapshotStore
             .Value;
         return EnsureExecutable(
             exe,
-            Environment.GetEnvironmentVariable("SOSHARNESS_EXECUTABLE_ROOT"),
+            RepoLayout.ExecutableRoot,
             RepoLayout.Root);
     }
 
@@ -441,7 +441,7 @@ public static class SnapshotStore
     {
         string tfm = CoreVersions.Tfm(coreVersion);
         string exe = Path.Combine(RepoLayout.CoreDebuggeeDir(target.Project, tfm), target.Project + RepoLayout.ExeSuffix);
-        if (UsePrebuiltTargets)
+        if (RepoLayout.IsPayload)
         {
             if (File.Exists(exe))
             {
@@ -522,7 +522,7 @@ public static class SnapshotStore
             return prebuilt;
         }
 
-        if (UsePrebuiltTargets)
+        if (RepoLayout.IsPayload)
         {
             throw new FileNotFoundException(
                 $"Pre-built Framework debuggee '{target.Project}' was not found at '{prebuilt}'.",
@@ -567,12 +567,6 @@ public static class SnapshotStore
         return exe;
     }
 
-    private static bool UsePrebuiltTargets =>
-        string.Equals(
-            Environment.GetEnvironmentVariable("SOSHARNESS_USE_PREBUILT_TARGETS"),
-            "1",
-            StringComparison.Ordinal);
-
     private static readonly ConcurrentDictionary<string, object> s_projectBuildLocks = new(StringComparer.OrdinalIgnoreCase);
 
     private static object BuildLockFor(string projectPath) =>
@@ -610,7 +604,7 @@ public static class SnapshotStore
         string dll = Path.Combine(RepoLayout.ArtifactsBin, name, RepoLayout.ArtifactsConfiguration, RepoLayout.TestTargetFramework, RepoLayout.Rid, name + ".dll");
         string project = Path.Combine(RepoLayout.Root, "src", "tests", name, name + ".csproj");
 
-        if (UsePrebuiltTargets && !File.Exists(dll))
+        if (RepoLayout.IsPayload && !File.Exists(dll))
         {
             throw new FileNotFoundException($"Pre-built subprocess '{name}' was not found at '{dll}'.", dll);
         }

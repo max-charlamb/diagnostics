@@ -25,7 +25,6 @@ public sealed class WindowsTheoryAttribute : TheoryAttribute
         [CallerLineNumber] int sourceLineNumber = -1)
         : base(sourceFilePath, sourceLineNumber)
     {
-        SkipTestWithoutData = TestConfig.AllowEmptyMatrix(Environment.GetEnvironmentVariable);
     }
 }
 

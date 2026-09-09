@@ -8,36 +8,6 @@ namespace SOS.Tests;
 
 public sealed class UnixPayloadTests
 {
-    [Fact]
-    public void DirectoryOverrideUsesConfiguredPath()
-    {
-        string expected = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "sos-harness-scratch"));
-        string defaultPath = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "default-scratch"));
-
-        Assert.Equal(expected, RepoLayout.ResolveDirectory(expected, "/unused"));
-        Assert.Equal(defaultPath, RepoLayout.ResolveDirectory(null, defaultPath));
-    }
-
-    [Fact]
-    public void UploadRootRoutesHarnessArtifacts()
-    {
-        string repoRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "sos-repo"));
-        string uploadRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "sos-upload"));
-
-        Assert.Equal(
-            Path.Combine(uploadRoot, "failure-diagnostics", "crashdumps"),
-            HostDiagnostics.ResolveCrashDumpDirectory(uploadRoot, repoRoot));
-        Assert.Equal(
-            Path.Combine(uploadRoot, "SOS-replays"),
-            SosReplayAttribute.ResolveReplayDirectory(uploadRoot, repoRoot));
-        Assert.Equal(
-            Path.Combine(repoRoot, "artifacts", "replays", "crashdumps"),
-            HostDiagnostics.ResolveCrashDumpDirectory(null, repoRoot));
-        Assert.Equal(
-            Path.Combine(repoRoot, "artifacts", "TestResults", "SOS.Tests"),
-            SosReplayAttribute.ResolveReplayDirectory(null, repoRoot));
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

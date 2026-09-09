@@ -2,20 +2,16 @@
 
 set -euo pipefail
 
-if [[ $# -lt 6 || $# -gt 7 ]]; then
-  echo "usage: $0 <configuration> <rid> <shard-index> <shard-count> <Dump|Live> <test-tfm> [max-parallel-threads]" >&2
+if [[ $# -lt 3 || $# -gt 5 ]]; then
+  echo "usage: $0 <configuration> <rid> <test-tfm> [max-parallel-threads] [test-runtime-major]" >&2
   exit 2
 fi
 
 configuration="$1"
 rid="$2"
-shard_index="$3"
-shard_count="$4"
-liveness="$5"
-test_tfm="$6"
-max_parallel_threads="${7:-}"
-test_runtime_major="${SOSHARNESS_TEST_RUNTIME_MAJOR:-}"
-liveness_name="$(printf '%s' "$liveness" | tr '[:upper:]' '[:lower:]')"
+test_tfm="$3"
+max_parallel_threads="${4:-}"
+test_runtime_major="${5:-}"
 
 if [[ -n "$max_parallel_threads" && (! "$max_parallel_threads" =~ ^[1-9][0-9]*$) ]]; then
   echo "max-parallel-threads must be a positive integer; got '$max_parallel_threads'." >&2
@@ -23,18 +19,17 @@ if [[ -n "$max_parallel_threads" && (! "$max_parallel_threads" =~ ^[1-9][0-9]*$)
 fi
 
 if [[ -n "$test_runtime_major" && (! "$test_runtime_major" =~ ^[1-9][0-9]*$) ]]; then
-  echo "SOSHARNESS_TEST_RUNTIME_MAJOR must be a positive integer; got '$test_runtime_major'." >&2
+  echo "test-runtime-major must be a positive integer; got '$test_runtime_major'." >&2
   exit 2
 fi
 
-: "${HELIX_CORRELATION_PAYLOAD:?HELIX_CORRELATION_PAYLOAD is required}"
 : "${HELIX_WORKITEM_UPLOAD_ROOT:?HELIX_WORKITEM_UPLOAD_ROOT is required}"
 
-root="$HELIX_CORRELATION_PAYLOAD"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 upload="$HELIX_WORKITEM_UPLOAD_ROOT"
 test_dll="$root/artifacts/bin/SOS.Tests/$configuration/$test_tfm/SOS.Tests.dll"
-identity="${liveness_name}-${shard_index}-of-${shard_count}"
-work="$PWD/.sos-harness"
+identity="all"
+work="${HELIX_WORKITEM_ROOT:-$root}/.sos-harness"
 
 mkdir -p "$upload" "$work"
 
@@ -135,7 +130,6 @@ configure_lldb()
     fi
 
     echo "Using SOS LLDB driver at '$driver'."
-    export SOSHARNESS_LLDB_PATH="$driver"
     return
   fi
 
@@ -217,7 +211,6 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
       codesign --force --sign - --entitlements "$entitlements" "$overlay_executable"
     done < <(find "$root/artifacts/bin/$debuggee/$configuration" -type f -name "$debuggee")
   done
-  export SOSHARNESS_EXCLUDE_SINGLEFILE_SNAPSHOTS=1
 fi
 
 if [[ "$rid" == linux-musl-* ]]; then
@@ -229,7 +222,6 @@ if [[ "$rid" == linux-musl-* ]]; then
     rm "$native_overlay/libmscordaccore_universal.so"
     cp "$native_source/libmscordaccore_universal.so" "$native_overlay/libmscordaccore_universal.so"
   fi
-  export SOSHARNESS_NATIVE_ROOT="$native_overlay"
 fi
 
 configure_lldb
@@ -237,20 +229,6 @@ configure_lldb
 export DOTNET_ROOT="$dotnet_root"
 export DOTNET_ROOT_X64="$DOTNET_ROOT"
 export DOTNET_MULTILEVEL_LOOKUP=0
-export NUGET_PACKAGES="$root/.packages"
-export SOSHARNESS_REPO_ROOT="$root"
-export SOSHARNESS_DOTNET_ROOT="$DOTNET_ROOT"
-export SOSHARNESS_DOTNET_TEST_ROOT="$DOTNET_ROOT"
-export SOSHARNESS_EXECUTABLE_ROOT="$work/executables"
-export SOSHARNESS_SCRATCH_ROOT="$work/scratch"
-export SOSHARNESS_ARTIFACTS_CONFIG="$configuration"
-export SOSHARNESS_USE_PREBUILT_TARGETS=1
-export SOSHARNESS_SHARD_INDEX="$shard_index"
-export SOSHARNESS_SHARD_COUNT="$shard_count"
-export SOSHARNESS_ONLY_LIVENESS="$liveness"
-export SOSHARNESS_UPLOAD_ROOT="$upload"
-export SOSHARNESS_LLDB_TRACE="$upload/SOS.Tests-${rid}-${configuration}-${identity}.lldb.log"
-
 log="$upload/SOS.Tests-${rid}-${configuration}-${identity}.log"
 run_tests()
 {

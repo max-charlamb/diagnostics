@@ -23,6 +23,5 @@ public sealed class SosTheoryAttribute : TheoryAttribute
         [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = -1)
         : base(sourceFilePath, sourceLineNumber)
     {
-        SkipTestWithoutData = TestConfig.AllowEmptyMatrix(Environment.GetEnvironmentVariable);
     }
 }

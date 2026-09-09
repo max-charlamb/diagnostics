@@ -1,13 +1,8 @@
 @echo off
 setlocal EnableExtensions
 
-if "%~6"=="" (
-  echo usage: %~nx0 ^<configuration^> ^<rid^> ^<shard-index^> ^<shard-count^> ^<Dump^|Live^> ^<test-tfm^>
-  exit /b 2
-)
-
-if "%HELIX_CORRELATION_PAYLOAD%"=="" (
-  echo HELIX_CORRELATION_PAYLOAD is required.
+if "%~3"=="" (
+  echo usage: %~nx0 ^<configuration^> ^<rid^> ^<test-tfm^>
   exit /b 2
 )
 
@@ -23,24 +18,12 @@ if "%HELIX_WORKITEM_ROOT%"=="" (
 
 set "CONFIGURATION=%~1"
 set "RID=%~2"
-set "SHARD_INDEX=%~3"
-set "SHARD_COUNT=%~4"
-set "LIVENESS=%~5"
-set "TEST_TFM=%~6"
-set "ROOT=%HELIX_CORRELATION_PAYLOAD%"
+set "TEST_TFM=%~3"
+set "ROOT=%~dp0"
 set "UPLOAD=%HELIX_WORKITEM_UPLOAD_ROOT%"
 set "TARGET_ARCH=%RID:win-=%"
 set "PAYLOAD_DOTNET_ROOT=%ROOT%\artifacts\dotnet-test"
 set "DOTNET_MULTILEVEL_LOOKUP=0"
-set "NUGET_PACKAGES=%ROOT%\.packages"
-set "SOSHARNESS_REPO_ROOT=%ROOT%"
-set "SOSHARNESS_ARTIFACTS_CONFIG=%CONFIGURATION%"
-set "SOSHARNESS_DBGENG_ROOT=%ROOT%\artifacts\cdb-sos"
-set "SOSHARNESS_USE_PREBUILT_TARGETS=1"
-set "SOSHARNESS_SHARD_INDEX=%SHARD_INDEX%"
-set "SOSHARNESS_SHARD_COUNT=%SHARD_COUNT%"
-set "SOSHARNESS_ONLY_LIVENESS=%LIVENESS%"
-set "SOSHARNESS_UPLOAD_ROOT=%UPLOAD%"
 
 if not exist "%UPLOAD%" mkdir "%UPLOAD%"
 
@@ -69,10 +52,8 @@ if not exist "%SIGNATURE_RUNTIME%\." (
 
 set "DOTNET_ROOT=%SIGNATURE_RUNTIME%"
 set "DOTNET_ROOT_X86=%DOTNET_ROOT%"
-set "SOSHARNESS_DOTNET_ROOT=%DOTNET_ROOT%"
-set "SOSHARNESS_DOTNET_TEST_ROOT=%DOTNET_ROOT%"
 
-set "IDENTITY=%LIVENESS%-%SHARD_INDEX%-of-%SHARD_COUNT%"
+set "IDENTITY=all"
 set "LOG=%UPLOAD%\SOS.Tests-%RID%-%CONFIGURATION%-%IDENTITY%.log"
 
 "%POWERSHELL_EXE%" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass ^

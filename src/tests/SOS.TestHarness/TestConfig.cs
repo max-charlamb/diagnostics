@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
-using System.Text;
 using Xunit;
 using Xunit.Sdk;
 
@@ -107,8 +105,8 @@ public sealed record TestConfig : IXunitSerializable
         Dac dac = Dac.All)
     {
         TheoryData<TestConfig> data = new();
-        foreach (TestConfig cfg in ApplyShardFilter(
-            UnshardedPermutations(targets, flavor, host, liveness, gcType, dumpKind, coreVersion, dac)))
+        foreach (TestConfig cfg in ValidPermutations(
+            targets, flavor, host, liveness, gcType, dumpKind, coreVersion, dac))
         {
             data.Add(cfg);
         }
@@ -130,9 +128,9 @@ public sealed record TestConfig : IXunitSerializable
         DumpKind dumpKind = DumpKind.Heap,
         CoreVersion coreVersion = CoreVersion.All,
         Dac dac = Dac.All) =>
-        ApplyShardFilter(UnshardedPermutations(targets, flavor, host, liveness, gcType, dumpKind, coreVersion, dac));
+        ValidPermutations(targets, flavor, host, liveness, gcType, dumpKind, coreVersion, dac);
 
-    internal static IEnumerable<TestConfig> UnshardedPermutations(
+    internal static IEnumerable<TestConfig> ValidPermutations(
         string[] targets,
         Flavor flavor = Flavor.AllValid,
         Host host = Host.AllValid,
@@ -197,49 +195,6 @@ public sealed record TestConfig : IXunitSerializable
         }
     }
 
-    internal static IEnumerable<TestConfig> ApplyShardFilter(IEnumerable<TestConfig> configs)
-        => ApplyShardFilter(
-            configs,
-            ShardSelection.FromEnvironment(Environment.GetEnvironmentVariable));
-
-    internal static IEnumerable<TestConfig> ApplyShardFilter(
-        IEnumerable<TestConfig> configs,
-        ShardSelection? shard)
-    {
-        foreach (TestConfig config in configs)
-        {
-            if (shard is null || config.GetCaptureShard(shard.Value.Count) == shard.Value.Index)
-            {
-                yield return config;
-            }
-        }
-    }
-
-    /// <summary>
-    /// The immutable capture-family key used for sharding. Host and DAC are deliberately absent because
-    /// they replay the same captured dump; keeping them together preserves <see cref="SnapshotStore"/> reuse.
-    /// </summary>
-    internal string CaptureFamilyKey =>
-        $"{Target}|{Flavor}|{CoreVersion}|{GcType}|{DumpKind}|{Liveness}";
-
-    internal int GetCaptureShard(int shardCount) =>
-        (int)(StableHash(CaptureFamilyKey) % (ulong)shardCount);
-
-    internal static ulong StableHash(string value)
-    {
-        const ulong offsetBasis = 14695981039346656037;
-        const ulong prime = 1099511628211;
-
-        ulong hash = offsetBasis;
-        foreach (byte b in Encoding.UTF8.GetBytes(value))
-        {
-            hash ^= b;
-            hash = unchecked(hash * prime);
-        }
-
-        return hash;
-    }
-
     /// <summary>
     /// Whether a configuration is valid on the current platform. Centralizes every constraint that the old
     /// nested-loop <c>BuildMatrix</c> scattered across per-axis <c>continue</c>s.
@@ -270,6 +225,12 @@ public sealed record TestConfig : IXunitSerializable
             return false;
         }
 
+        // The unprivileged Alpine Helix environment cannot reliably capture .NET 8 Mini dumps.
+        if (!IsDumpKindSupportedOnHelix(c.DumpKind, c.IsLive, RepoLayout.Rid, RepoLayout.IsHelix))
+        {
+            return false;
+        }
+
         // dotnet-dump is post-mortem only; it has no live host.
         if (c.IsLive && c.Host == Host.DotnetDump)
         {
@@ -290,10 +251,10 @@ public sealed record TestConfig : IXunitSerializable
         // regions for a statically linked runtime. On constrained test machines, marker targets produce
         // several multi-gigabyte dumps and cannot complete reliably. Helix launchers can exclude only those
         // snapshot rows while preserving single-file crash coverage.
-        if (!c.IsLive &&
-            c.Flavor == Flavor.SingleFile &&
-            TargetCatalog.NavigatesViaBpmd(c.Target) &&
-            ExcludeSingleFileSnapshots(Environment.GetEnvironmentVariable("SOSHARNESS_EXCLUDE_SINGLEFILE_SNAPSHOTS")))
+        if (ShouldExcludeSingleFileSnapshot(
+            c,
+            OperatingSystem.IsMacOS(),
+            RepoLayout.IsHelix))
         {
             return false;
         }
@@ -344,29 +305,18 @@ public sealed record TestConfig : IXunitSerializable
     internal static bool IsFlavorSupportedOnRid(Flavor flavor, string rid) =>
         flavor != Flavor.SingleFile || !rid.StartsWith("linux-musl-", StringComparison.Ordinal);
 
-    internal static bool ExcludeSingleFileSnapshots(string? value) => value switch
-    {
-        null or "" or "0" => false,
-        "1" => true,
-        _ => throw new InvalidOperationException(
-            "SOSHARNESS_EXCLUDE_SINGLEFILE_SNAPSHOTS must be unset, 0, or 1."),
-    };
+    internal static bool IsDumpKindSupportedOnHelix(DumpKind dumpKind, bool isLive, string rid, bool isHelix) =>
+        !isHelix ||
+        isLive ||
+        dumpKind != DumpKind.Mini ||
+        !rid.StartsWith("linux-musl-", StringComparison.Ordinal);
 
-    internal static bool AllowEmptyMatrix(Func<string, string?> getEnvironmentVariable)
-    {
-        if (ShardSelection.FromEnvironment(getEnvironmentVariable) is not null)
-        {
-            return true;
-        }
-
-        return !string.IsNullOrEmpty(getEnvironmentVariable("SOSHARNESS_ONLY_HOSTS")) ||
-            !string.IsNullOrEmpty(getEnvironmentVariable("SOSHARNESS_ONLY_FLAVORS")) ||
-            !string.IsNullOrEmpty(getEnvironmentVariable("SOSHARNESS_ONLY_LIVENESS")) ||
-            !string.IsNullOrEmpty(getEnvironmentVariable("SOSHARNESS_ONLY_GCTYPE")) ||
-            !string.IsNullOrEmpty(getEnvironmentVariable("SOSHARNESS_ONLY_DUMPKIND")) ||
-            !string.IsNullOrEmpty(getEnvironmentVariable("SOSHARNESS_ONLY_COREVERSIONS")) ||
-            !string.IsNullOrEmpty(getEnvironmentVariable("SOSHARNESS_ONLY_DAC"));
-    }
+    internal static bool ShouldExcludeSingleFileSnapshot(TestConfig config, bool isMacOS, bool isHelix) =>
+        isHelix &&
+        isMacOS &&
+        !config.IsLive &&
+        config.Flavor == Flavor.SingleFile &&
+        TargetCatalog.NavigatesViaBpmd(config.Target);
 
     private static IEnumerable<T> SingleFlags<T>(T value) where T : struct, Enum
     {
@@ -442,45 +392,5 @@ public sealed record TestConfig : IXunitSerializable
         string dump = IsLive ? string.Empty : "/" + DumpKind;
         string dac = Dac == Dac.CDac ? "/cdac" : string.Empty;
         return $"{Target}/{Host}/{Flavor}{version}/{Liveness}/{GcType}{dump}{dac}";
-    }
-
-}
-
-internal readonly record struct ShardSelection(int Index, int Count)
-{
-    private const string IndexVariable = "SOSHARNESS_SHARD_INDEX";
-    private const string CountVariable = "SOSHARNESS_SHARD_COUNT";
-
-    public static ShardSelection? FromEnvironment(Func<string, string?> getEnvironmentVariable)
-    {
-        string? indexValue = getEnvironmentVariable(IndexVariable);
-        string? countValue = getEnvironmentVariable(CountVariable);
-
-        if (indexValue is null && countValue is null)
-        {
-            return null;
-        }
-
-        if (indexValue is null || countValue is null)
-        {
-            throw new InvalidOperationException(
-                $"{IndexVariable} and {CountVariable} must either both be set or both be unset.");
-        }
-
-        if (!int.TryParse(countValue, NumberStyles.None, CultureInfo.InvariantCulture, out int count) || count <= 0)
-        {
-            throw new InvalidOperationException(
-                $"{CountVariable} must be a positive base-10 integer; received '{countValue}'.");
-        }
-
-        if (!int.TryParse(indexValue, NumberStyles.None, CultureInfo.InvariantCulture, out int index) ||
-            index < 0 ||
-            index >= count)
-        {
-            throw new InvalidOperationException(
-                $"{IndexVariable} must be a base-10 integer in [0, {count}); received '{indexValue}'.");
-        }
-
-        return new ShardSelection(index, count);
     }
 }

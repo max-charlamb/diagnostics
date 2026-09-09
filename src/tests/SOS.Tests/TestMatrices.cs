@@ -38,10 +38,9 @@ internal static class TestMatrices
         CoreVersion coreVersion = CoreVersion.All,
         Dac dac = Dac.All,
         Func<TestConfig, bool>? filter = null) =>
-        TestConfig.ApplyShardFilter(
-            UnshardedStackWalkConfigs(targets, flavor, host, liveness, gcType, dumpKind, coreVersion, dac, filter));
+        StackWalkConfigsCore(targets, flavor, host, liveness, gcType, dumpKind, coreVersion, dac, filter);
 
-    private static IEnumerable<TestConfig> UnshardedStackWalkConfigs(
+    private static IEnumerable<TestConfig> StackWalkConfigsCore(
         string[] targets,
         Flavor flavor,
         Host host,
@@ -52,7 +51,7 @@ internal static class TestMatrices
         Dac dac,
         Func<TestConfig, bool>? filter) =>
         // .NET 11 cDAC supports SingleFile stack walks; TestConfig rejects cDAC on earlier runtimes.
-        TestConfig.UnshardedPermutations(targets, flavor, host, liveness, gcType, dumpKind, coreVersion: coreVersion, dac: dac)
+        TestConfig.ValidPermutations(targets, flavor, host, liveness, gcType, dumpKind, coreVersion: coreVersion, dac: dac)
             .Where(SupportsCurrentThread)
             .Where(config => filter is null || filter(config));
 
@@ -113,13 +112,13 @@ internal static class TestMatrices
     {
         TheoryData<TestConfig> data = new();
         IEnumerable<TestConfig> configs =
-            TestConfig.UnshardedPermutations(targets, flavor, host, liveness, gcType, dumpKind, coreVersion, dac)
+            TestConfig.ValidPermutations(targets, flavor, host, liveness, gcType, dumpKind, coreVersion, dac)
                 .Select(config =>
                     OperatingSystem.IsWindows() && (config.CoreVersion & fullDumpVersions) != 0
                         ? config with { DumpKind = DumpKind.Full }
                         : config);
 
-        foreach (TestConfig config in TestConfig.ApplyShardFilter(configs))
+        foreach (TestConfig config in configs)
         {
             data.Add(config);
         }
@@ -138,7 +137,7 @@ internal static class TestMatrices
         Func<TestConfig, bool>? filter = null)
     {
         TheoryData<TestConfig> data = new();
-        IEnumerable<TestConfig> configs = UnshardedStackWalkConfigs(
+        IEnumerable<TestConfig> configs = StackWalkConfigsCore(
                 targets,
                 flavor,
                 host,
@@ -153,7 +152,7 @@ internal static class TestMatrices
                     ? config with { DumpKind = DumpKind.Full }
                     : config);
 
-        foreach (TestConfig config in TestConfig.ApplyShardFilter(configs))
+        foreach (TestConfig config in configs)
         {
             data.Add(config);
         }
@@ -203,11 +202,11 @@ internal static class TestMatrices
     }
 
     public static IEnumerable<TestConfig> CoreFrameworkConditionalFullDumpConfigs(string[] targets) =>
-        TestConfig.ApplyShardFilter(UnshardedCoreFrameworkConditionalFullDumpConfigs(targets));
+        CoreFrameworkConditionalFullDumpConfigsCore(targets);
 
-    private static IEnumerable<TestConfig> UnshardedCoreFrameworkConditionalFullDumpConfigs(string[] targets)
+    private static IEnumerable<TestConfig> CoreFrameworkConditionalFullDumpConfigsCore(string[] targets)
     {
-        foreach (TestConfig config in TestConfig.UnshardedPermutations(
+        foreach (TestConfig config in TestConfig.ValidPermutations(
             targets,
             flavor: Flavor.Core | Flavor.Framework,
             dumpKind: DumpKind.Heap))

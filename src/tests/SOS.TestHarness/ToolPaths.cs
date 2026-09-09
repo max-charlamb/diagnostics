@@ -120,19 +120,10 @@ public static class ToolPaths
 
     private static string ResolveDbgEngDirectory()
     {
-        string? configuredDirectory = Environment.GetEnvironmentVariable("SOSHARNESS_DBGENG_ROOT");
-        if (!string.IsNullOrEmpty(configuredDirectory))
+        string payloadPath = Path.Combine(RepoLayout.CdbRoot, "dbgeng.dll");
+        if (File.Exists(payloadPath))
         {
-            string directory = Path.GetFullPath(configuredDirectory);
-            string dbgEngPath = Path.Combine(directory, "dbgeng.dll");
-            if (File.Exists(dbgEngPath))
-            {
-                return directory;
-            }
-
-            throw new FileNotFoundException(
-                $"Could not locate dbgeng.dll in the configured SOS harness DbgEng directory '{directory}'.",
-                dbgEngPath);
+            return RepoLayout.CdbRoot;
         }
 
         string relativeNative = Path.Combine("runtimes", $"win-{RepoLayout.TargetArch}", "native");
@@ -190,14 +181,21 @@ public static class ToolPaths
 
     private static string ResolveLldbExe()
     {
-        // 1) Explicit harness override.
+        // 1) A prepared payload copy of the macOS driver.
+        string payloadDriver = Path.Combine(RepoLayout.WorkRoot, ".sos-harness", "sos-lldb");
+        if (File.Exists(payloadDriver))
+        {
+            return payloadDriver;
+        }
+
+        // 2) Explicit harness override.
         string? env = Environment.GetEnvironmentVariable("SOSHARNESS_LLDB_PATH");
         if (!string.IsNullOrEmpty(env) && File.Exists(env))
         {
             return env;
         }
 
-        // 2) The repo-built macOS driver uses the selected Xcode's LLDB framework without running inside
+        // 3) The repo-built macOS driver uses the selected Xcode's LLDB framework without running inside
         //    Apple's restricted LLDB executable.
         if (OperatingSystem.IsMacOS())
         {
@@ -208,14 +206,14 @@ public static class ToolPaths
             }
         }
 
-        // 3) Existing build-script override.
+        // 4) Existing build-script override.
         env = Environment.GetEnvironmentVariable("LLDB_PATH");
         if (!string.IsNullOrEmpty(env) && File.Exists(env))
         {
             return env;
         }
 
-        // 4) Xcode's LLDB.
+        // 5) Xcode's LLDB.
         if (OperatingSystem.IsMacOS())
         {
             string? developerDir = TryRun("xcode-select", "-p");
@@ -229,7 +227,7 @@ public static class ToolPaths
             }
         }
 
-        // 5) A plain `lldb` on PATH.
+        // 6) A plain `lldb` on PATH.
         string? onPath = FindOnPath("lldb");
         if (onPath is not null)
         {
@@ -279,15 +277,15 @@ public static class ToolPaths
                 $"{coreClrName} and System.Private.CoreLib.dll.");
         }
 
-        // SOS hosts its managed extension on a .NET runtime; point it at the repo's locally-acquired
-        // .dotnet shared runtime so it's deterministic. Any recent runtime works as a host (it need not
-        // match the target's runtime), so pick the highest net10 present.
+        // SOS hosts its managed extension on a deterministic runtime from the selected layout. The macOS
+        // payload uses the runtime containing the CoreCLR hosting fix; other layouts use net10.
         string sharedRoot = Path.Combine(RepoLayout.DotNetRoot, "shared", "Microsoft.NETCore.App");
+        string majorPrefix = OperatingSystem.IsMacOS() && RepoLayout.IsPayload ? "11.0." : "10.0.";
         if (Directory.Exists(sharedRoot))
         {
             string? best = Directory.GetDirectories(sharedRoot)
                 .Select(Path.GetFileName)
-                .Where(v => v is not null && v.StartsWith("10.0.", StringComparison.Ordinal))
+                .Where(v => v is not null && v.StartsWith(majorPrefix, StringComparison.Ordinal))
                 .OrderByDescending(v => v, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
             if (best is not null)
@@ -297,8 +295,7 @@ public static class ToolPaths
         }
 
         throw new DirectoryNotFoundException(
-            $"Could not locate a net10 host runtime under '{sharedRoot}'. Run ./build.sh so the repo's " +
-            ".dotnet runtime is acquired.");
+            $"Could not locate a {majorPrefix.TrimEnd('.')} host runtime under '{sharedRoot}'.");
     }
 
     private static string ResolveCreateDumpPath()
