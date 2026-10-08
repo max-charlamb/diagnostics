@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Threading;
 using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.Runtime.Utilities;
@@ -240,10 +241,17 @@ namespace Microsoft.Diagnostics
             return hr;
         }
 
-        public static HResult CLRCreateInstance(out ICLRDebugging clrDebugging)
+        public static unsafe HResult CLRCreateInstance(out ICLRDebugging clrDebugging)
         {
-            HResult hr = _clrCreateInstance(ICLRDebugging.CLSID_ICLRDebugging, ICLRDebugging.IID_ICLRDebugging, out IntPtr punk);
-            clrDebugging = ICLRDebugging.Create(punk);
+            HResult hr = _clrCreateInstance(ICLRDebugging.CLSID_ICLRDebugging, typeof(ICLRDebugging).GUID, out IntPtr punk);
+            try
+            {
+                clrDebugging = ComInterfaceMarshaller<ICLRDebugging>.ConvertToManaged((void*)punk);
+            }
+            finally
+            {
+                ComInterfaceMarshaller<ICLRDebugging>.Free((void*)punk);
+            }
             return hr;
         }
 

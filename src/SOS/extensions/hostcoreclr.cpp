@@ -49,10 +49,6 @@ struct RuntimeVersion
     uint32_t Minor;
 };
 
-#if !defined(FEATURE_PAL) && !defined(HOST_ARM64) && !defined(HOST_ARM)
-extern HRESULT InitializeDesktopClrHost();
-#endif
-
 #ifndef FEATURE_PAL
 extern HMODULE g_hInstance;
 #endif
@@ -757,26 +753,13 @@ HRESULT InitializeHosting()
     {
         return E_FAIL;
     }
-    HRESULT hr = S_OK;
-    if (g_hostRuntimeFlavor == HostRuntimeFlavor::NetCore)
-    {
-        hr = InitializeNetCoreHost();
-        if (SUCCEEDED(hr))
-        {
-            g_hostRuntimeFlavor = HostRuntimeFlavor::NetCore;
-            g_hostingInitialized = true;
-            return hr;
-        }
-    }
-#if !defined(FEATURE_PAL) && !defined(HOST_ARM64) && !defined(HOST_ARM)
-    hr = InitializeDesktopClrHost();
+    HRESULT hr = InitializeNetCoreHost();
     if (SUCCEEDED(hr))
     {
-        g_hostRuntimeFlavor = HostRuntimeFlavor::NetFx;
+        g_hostRuntimeFlavor = HostRuntimeFlavor::NetCore;
         g_hostingInitialized = true;
         return hr;
     }
-#endif
     g_hostRuntimeFlavor = HostRuntimeFlavor::None;
     return hr;
 }

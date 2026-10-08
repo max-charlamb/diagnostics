@@ -61,9 +61,7 @@ internal static class SOSPackageLayout
 
     private static string ComputePackageBaseDirectory()
     {
-        string location = typeof(SOSPackageLayout).Assembly.Location;
-        return Path.GetDirectoryName(location)
-            ?? throw new InvalidOperationException($"Cannot resolve package base directory: {typeof(SOSPackageLayout).Assembly.GetName().Name} has no on-disk location.");
+        return AppContext.BaseDirectory;
     }
 
     /// <summary>

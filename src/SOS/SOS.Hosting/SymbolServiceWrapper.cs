@@ -6,12 +6,14 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using Microsoft.Diagnostics.DebugServices;
-using Microsoft.Diagnostics.Runtime.Utilities;
+using SOS.Hosting.Interop;
 
 namespace SOS.Hosting
 {
-    public sealed class SymbolServiceWrapper : COMCallableIUnknown
+    [GeneratedComClass]
+    public sealed partial class SymbolServiceWrapper : ISymbolServiceGenerated
     {
         /// <summary>
         /// Matches the IRuntime::RuntimeConfiguration in runtime.h
@@ -24,24 +26,6 @@ namespace SOS.Hosting
             OSXCore = 3
         }
 
-        /// <summary>
-        /// Writeline delegate for symbol store logging
-        /// </summary>
-        /// <param name="message"></param>
-        private delegate void WriteLine([MarshalAs(UnmanagedType.LPStr)] string message);
-
-        /// <summary>
-        /// The LoadNativeSymbols callback
-        /// </summary>
-        /// <param name="moduleFileName">module file name</param>
-        /// <param name="symbolFileName">symbol file name and path</param>
-        private delegate void SymbolFileCallback(
-            IntPtr parameter,
-            [MarshalAs(UnmanagedType.LPStr)] string moduleFileName,
-            [MarshalAs(UnmanagedType.LPStr)] string symbolFileName);
-
-        public static readonly Guid IID_ISymbolService = new("7EE88D46-F8B3-4645-AD3E-01FE7D4F70F1");
-
         private readonly ISymbolService _symbolService;
         private readonly IMemoryService _memoryService;
         private readonly ulong _ignoreAddressBitsMask;
@@ -53,25 +37,6 @@ namespace SOS.Hosting
             _symbolService = symbolService;
             _memoryService = memoryService;
             _ignoreAddressBitsMask = memoryService.SignExtensionMask();
-
-            VTableBuilder builder = AddInterface(IID_ISymbolService, validate: false);
-            builder.AddMethod(new ParseSymbolPathDelegate(ParseSymbolPath));
-            builder.AddMethod(new LoadSymbolsForModuleDelegate(LoadSymbolsForModule));
-            builder.AddMethod(new DisposeDelegate(Dispose));
-            builder.AddMethod(new ResolveSequencePointDelegate(ResolveSequencePoint));
-            builder.AddMethod(new GetLocalVariableNameDelegate(GetLocalVariableName));
-            builder.AddMethod(new GetLineByILOffsetDelegate(GetLineByILOffset));
-            builder.AddMethod(new GetExpressionValueDelegate(GetExpressionValue));
-            builder.AddMethod(new GetMetadataLocatorDelegate(GetMetadataLocator));
-            builder.AddMethod(new GetICorDebugMetadataLocatorDelegate(GetICorDebugMetadataLocator));
-            builder.Complete();
-
-            AddRef();
-        }
-
-        protected override void Destroy()
-        {
-            Trace.TraceInformation("SymbolServiceWrapper.Destroy");
         }
 
         /// <summary>
@@ -79,9 +44,7 @@ namespace SOS.Hosting
         /// </summary>
         /// <param name="symbolPath">windows symbol path</param>
         /// <returns>if false, failure</returns>
-        private bool ParseSymbolPath(
-            IntPtr self,
-            string symbolPath)
+        bool ISymbolServiceGenerated.ParseSymbolPath(string symbolPath)
         {
             if (string.IsNullOrWhiteSpace(symbolPath))
             {
@@ -96,9 +59,7 @@ namespace SOS.Hosting
         /// </summary>
         /// <param name="expression">hex number</param>
         /// <returns>value</returns>
-        internal static ulong GetExpressionValue(
-            IntPtr self,
-            string expression)
+        ulong ISymbolServiceGenerated.GetExpressionValue(string expression)
         {
             if (expression != null)
             {
@@ -126,8 +87,7 @@ namespace SOS.Hosting
         /// <param name="inMemoryPdbAddress">in memory PDB address or zero</param>
         /// <param name="inMemoryPdbSize">in memory PDB size</param>
         /// <returns>Symbol reader handle or zero if error</returns>
-        private IntPtr LoadSymbolsForModule(
-            IntPtr self,
+        IntPtr ISymbolServiceGenerated.LoadSymbolsForModule(
             string assemblyPath,
             bool isFileLayout,
             ulong loadedPeAddress,
@@ -167,9 +127,7 @@ namespace SOS.Hosting
         /// Cleanup and dispose of symbol reader handle
         /// </summary>
         /// <param name="symbolReaderHandle">symbol reader handle returned by LoadSymbolsForModule</param>
-        private void Dispose(
-            IntPtr self,
-            IntPtr symbolReaderHandle)
+        void ISymbolServiceGenerated.Dispose(IntPtr symbolReaderHandle)
         {
             Debug.Assert(symbolReaderHandle != IntPtr.Zero);
             try
@@ -196,8 +154,7 @@ namespace SOS.Hosting
         /// <param name="methodToken">method token return</param>
         /// <param name="ilOffset">IL offset return</param>
         /// <returns> true if information is available</returns>
-        private bool ResolveSequencePoint(
-            IntPtr self,
+        bool ISymbolServiceGenerated.ResolveSequencePoint(
             IntPtr symbolReaderHandle,
             string filePath,
             int lineNumber,
@@ -219,16 +176,15 @@ namespace SOS.Hosting
         /// <param name="lineNumber">source line number return</param>
         /// <param name="fileName">source file name return</param>
         /// <returns> true if information is available</returns>
-        private bool GetLineByILOffset(
-            IntPtr self,
+        bool ISymbolServiceGenerated.GetLineByILOffset(
             IntPtr symbolReaderHandle,
             int methodToken,
             long ilOffset,
             out int lineNumber,
-            out IntPtr fileName)
+            out string fileName)
         {
             Debug.Assert(symbolReaderHandle != IntPtr.Zero);
-            fileName = IntPtr.Zero;
+            fileName = null;
 
             GCHandle gch = GCHandle.FromIntPtr(symbolReaderHandle);
             ISymbolFile symbolFile = (ISymbolFile)gch.Target;
@@ -236,7 +192,7 @@ namespace SOS.Hosting
             {
                 return false;
             }
-            fileName = Marshal.StringToBSTR(sourceFileName);
+            fileName = sourceFileName;
             return true;
         }
 
@@ -248,15 +204,14 @@ namespace SOS.Hosting
         /// <param name="localIndex">local variable index</param>
         /// <param name="localVarName">local variable name return</param>
         /// <returns>true if name has been found</returns>
-        private bool GetLocalVariableName(
-            IntPtr self,
+        bool ISymbolServiceGenerated.GetLocalVariableName(
             IntPtr symbolReaderHandle,
             int methodToken,
             int localIndex,
-            out IntPtr localVarName)
+            out string localVarName)
         {
             Debug.Assert(symbolReaderHandle != IntPtr.Zero);
-            localVarName = IntPtr.Zero;
+            localVarName = null;
 
             GCHandle gch = GCHandle.FromIntPtr(symbolReaderHandle);
             ISymbolFile symbolFile = (ISymbolFile)gch.Target;
@@ -264,7 +219,7 @@ namespace SOS.Hosting
             {
                 return false;
             }
-            localVarName = Marshal.StringToBSTR(localVar);
+            localVarName = localVar;
             return true;
         }
 
@@ -281,8 +236,7 @@ namespace SOS.Hosting
         /// <param name="pMetadata">pointer to buffer</param>
         /// <param name="pMetadataSize">size of outgoing metadata</param>
         /// <returns>HRESULT</returns>
-        internal int GetMetadataLocator(
-            IntPtr self,
+        int ISymbolServiceGenerated.GetMetadataLocator(
             string imagePath,
             uint imageTimestamp,
             uint imageSize,
@@ -315,8 +269,7 @@ namespace SOS.Hosting
         /// <param name="pPathBufferSize">native pointer to put actual path size</param>
         /// <param name="pwszPathBuffer">native pointer to WCHAR path buffer</param>
         /// <returns>HRESULT</returns>
-        internal int GetICorDebugMetadataLocator(
-            IntPtr self,
+        int ISymbolServiceGenerated.GetICorDebugMetadataLocator(
             string imagePath,
             uint imageTimestamp,
             uint imageSize,
@@ -332,83 +285,5 @@ namespace SOS.Hosting
                 pPathBufferSize,
                 pwszPathBuffer);
         }
-
-        #region Symbol service delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate bool ParseSymbolPathDelegate(
-            [In] IntPtr self,
-            [In] string windowsSymbolPath);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate IntPtr LoadSymbolsForModuleDelegate(
-            [In] IntPtr self,
-            [In, MarshalAs(UnmanagedType.LPWStr)] string assemblyPath,
-            [In] bool isFileLayout,
-            [In] ulong loadedPeAddress,
-            [In] uint loadedPeSize,
-            [In] ulong inMemoryPdbAddress,
-            [In] uint inMemoryPdbSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate void DisposeDelegate(
-            [In] IntPtr self,
-            [In] IntPtr symbolReaderHandle);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate bool ResolveSequencePointDelegate(
-            [In] IntPtr self,
-            [In] IntPtr symbolReaderHandle,
-            [In] string filePath,
-            [In] int lineNumber,
-            [Out] out int methodToken,
-            [Out] out int ilOffset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate bool GetLineByILOffsetDelegate(
-            [In] IntPtr self,
-            [In] IntPtr symbolReaderHandle,
-            [In] int methodToken,
-            [In] long ilOffset,
-            [Out] out int lineNumber,
-            [Out] out IntPtr fileName);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate bool GetLocalVariableNameDelegate(
-            [In] IntPtr self,
-            [In] IntPtr symbolReaderHandle,
-            [In] int methodToken,
-            [In] int localIndex,
-            [Out] out IntPtr localVarName);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate ulong GetExpressionValueDelegate(
-            [In] IntPtr self,
-            [In, MarshalAs(UnmanagedType.LPStr)] string expression);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetMetadataLocatorDelegate(
-            [In] IntPtr self,
-            [In, MarshalAs(UnmanagedType.LPWStr)] string imagePath,
-            [In] uint imageTimestamp,
-            [In] uint imageSize,
-            [In, MarshalAs(UnmanagedType.LPArray, SizeConst = 16)] byte[] mvid,
-            [In] uint mdRva,
-            [In] uint flags,
-            [In] uint bufferSize,
-            [Out] IntPtr buffer,
-            [Out] IntPtr dataSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetICorDebugMetadataLocatorDelegate(
-            [In] IntPtr self,
-            [In, MarshalAs(UnmanagedType.LPWStr)] string imagePath,
-            [In] uint imageTimestamp,
-            [In] uint imageSize,
-            [In] uint pathBufferSize,
-            [Out] IntPtr pPathBufferSize,
-            [Out] IntPtr pPathBuffer);
-
-        #endregion
     }
 }

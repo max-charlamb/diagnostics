@@ -5,21 +5,22 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.Runtime.Utilities;
+using SOS.Hosting.Interop;
 
 namespace SOS.Hosting
 {
-    internal sealed class RuntimeLibraryProvider : COMCallableIUnknown, IDisposable
+    [GeneratedComClass]
+    internal sealed partial class RuntimeLibraryProvider : ICLRDebuggingLibraryProvider2Generated, IDisposable
     {
-        private static readonly Guid IID_ICLRDebuggingLibraryProvider2 = new("E04E2FF1-DCFD-45D5-BCD1-16FFF2FAF7BA");
-
         private readonly Func<string> _getDbiPath;
         private readonly Func<string> _getDacPath;
         private readonly bool _verifySignature;
         private readonly List<IDisposable> _verifiedFiles = [];
 
-        public IntPtr ILibraryProvider { get; }
+        public IntPtr ILibraryProvider { get; private set; }
 
         public RuntimeLibraryProvider(
             Func<string> getDbiPath,
@@ -30,31 +31,37 @@ namespace SOS.Hosting
             _getDacPath = getDacPath ?? throw new ArgumentNullException(nameof(getDacPath));
             _verifySignature = verifySignature;
 
-            VTableBuilder builder = AddInterface(IID_ICLRDebuggingLibraryProvider2, validate: false);
-            builder.AddMethod(new ProvideLibrary2Delegate(ProvideLibrary2));
-            ILibraryProvider = builder.Complete();
-
-            AddRef();
+            unsafe
+            {
+                ILibraryProvider = (IntPtr)ComInterfaceMarshaller<ICLRDebuggingLibraryProvider2Generated>.ConvertToUnmanaged(this);
+            }
         }
 
         void IDisposable.Dispose()
         {
+            if (ILibraryProvider == IntPtr.Zero)
+            {
+                return;
+            }
             foreach (IDisposable verifiedFile in _verifiedFiles)
             {
                 verifiedFile.Dispose();
             }
             _verifiedFiles.Clear();
-            this.ReleaseWithCheck();
+            unsafe
+            {
+                ComInterfaceMarshaller<ICLRDebuggingLibraryProvider2Generated>.Free((void*)ILibraryProvider);
+            }
+            ILibraryProvider = IntPtr.Zero;
         }
 
-        private int ProvideLibrary2(
-            IntPtr self,
+        int ICLRDebuggingLibraryProvider2Generated.ProvideLibrary2(
             string fileName,
             uint timeStamp,
             uint sizeOfImage,
-            out IntPtr modulePath)
+            out string modulePath)
         {
-            modulePath = IntPtr.Zero;
+            modulePath = null;
 
             try
             {
@@ -79,7 +86,7 @@ namespace SOS.Hosting
                     _verifiedFiles.Add(fileLock);
                 }
 
-                modulePath = Marshal.StringToCoTaskMemUni(path);
+                modulePath = path;
                 Trace.TraceInformation($"RuntimeLibraryProvider: resolved {fileName} to {path}");
                 return HResult.S_OK;
             }
@@ -90,12 +97,5 @@ namespace SOS.Hosting
             }
         }
 
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int ProvideLibrary2Delegate(
-            [In] IntPtr self,
-            [In, MarshalAs(UnmanagedType.LPWStr)] string fileName,
-            [In] uint timeStamp,
-            [In] uint sizeOfImage,
-            [Out] out IntPtr modulePath);
     }
 }

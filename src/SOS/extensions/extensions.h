@@ -19,8 +19,7 @@ interface IRuntime;
 enum HostRuntimeFlavor
 {
     None,
-    NetCore,
-    NetFx
+    NetCore
 };
 
 extern BOOL IsHostingInitialized();

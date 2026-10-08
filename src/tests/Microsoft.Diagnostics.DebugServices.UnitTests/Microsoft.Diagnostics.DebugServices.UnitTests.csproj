@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(NetCoreAppTestTargetFramework)</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsHelixTestProject>true</IsHelixTestProject>
     <DebugServicesConfigFileName>$(OutputPath)$(TargetFramework)\Debugger.Tests.Common.txt</DebugServicesConfigFileName>
     <TestAssetsVersion>1.0.736301</TestAssetsVersion>

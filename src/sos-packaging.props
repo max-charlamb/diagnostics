@@ -22,19 +22,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <SOSExtensionsBinaries Include="$(ArtifactsBinDir)\SOS.Extensions\$(Configuration)\$(DesktopTargetFramework)\publish\*.dll"
-                           TargetFramework="$(DesktopTargetFramework)" />
-    <SOSExtensionsBinaries Include="$(ArtifactsBinDir)\SOS.Extensions\$(Configuration)\$(NetCoreAppMinTargetFramework)\publish\*.dll"
-                           TargetFramework="$(NetCoreAppMinTargetFramework)" />
+    <SOSExtensionsBinaries Include="$(ArtifactsBinDir)\SOS.Extensions\$(Configuration)\$(SOSManagedTargetFramework)\publish\*.dll"
+                           TargetFramework="$(SOSManagedTargetFramework)" />
   </ItemGroup>
 
   <Target Name="ValidateSOSExtensionsBinaries"
           BeforeTargets="GenerateNuspec"
           Condition="'$(RequireSOSExtensionsBinaries)' == 'true'">
-    <Error Condition="'@(SOSExtensionsBinaries->WithMetadataValue('TargetFramework', '$(DesktopTargetFramework)'))' == ''"
-           Text="The $(DesktopTargetFramework) SOS managed payload was not found. Build SOS.Extensions for $(Configuration) before packing." />
-    <Error Condition="'@(SOSExtensionsBinaries->WithMetadataValue('TargetFramework', '$(NetCoreAppMinTargetFramework)'))' == ''"
-           Text="The $(NetCoreAppMinTargetFramework) SOS managed payload was not found. Build SOS.Extensions for $(Configuration) before packing." />
+    <Error Condition="'@(SOSExtensionsBinaries->WithMetadataValue('TargetFramework', '$(SOSManagedTargetFramework)'))' == ''"
+           Text="The $(SOSManagedTargetFramework) SOS managed payload was not found. Build SOS.Extensions for $(Configuration) before packing." />
   </Target>
 
   <!-- Each RID's required binaries are grouped in an ItemGroup guarded by SingleTargetRidPackage:

@@ -5,17 +5,20 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using Microsoft.FileFormats.ELF;
 using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop;
 
 namespace SOS.Hosting
 {
     [ServiceExport(Scope = ServiceScope.Runtime)]
-    public sealed unsafe class RuntimeWrapper : COMCallableIUnknown, IDisposable
+    [GeneratedComClass]
+    public sealed unsafe partial class RuntimeWrapper : IRuntimeGenerated, IDisposable
     {
         /// <summary>
         /// The runtime OS and type. Must match IRuntime::RuntimeConfiguration in runtime.h.
@@ -31,9 +34,6 @@ namespace SOS.Hosting
 
         public static Guid IID_IXCLRDataProcess = new("5c552ab6-fc09-4cb3-8e36-22fa03c798b7");
         public static Guid IID_ICorDebugProcess = new("3d6f5f64-7538-11d3-8d5b-00104b35e7ef");
-        private static readonly Guid IID_IRuntime = new("A5F152B9-BA78-4512-9228-5091A4CB7E35");
-
-        #region DAC and DBI function delegates
 
         [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         private delegate int DllMainDelegate(
@@ -76,16 +76,18 @@ namespace SOS.Hosting
             out IntPtr instance,
             out ClrDebuggingProcessFlags flags);
 
-        #endregion
-
         private readonly IServiceProvider _services;
         private readonly IRuntime _runtime;
         private IntPtr _clrDataProcess = IntPtr.Zero;
         private IntPtr _corDebugProcess = IntPtr.Zero;
         private IntPtr _dacHandle = IntPtr.Zero;
         private IntPtr _dbiHandle = IntPtr.Zero;
+        private bool _disposed;
 
-        public IntPtr IRuntime { get; }
+        internal bool IsDisposed => _disposed;
+
+        // GetRuntime's existing ABI returns a borrowed pointer, not an AddRef-owned interface.
+        public IntPtr IRuntime { get; private set; }
 
         public RuntimeWrapper(IServiceProvider services, IRuntime runtime)
         {
@@ -93,41 +95,25 @@ namespace SOS.Hosting
             Debug.Assert(runtime != null);
             _services = services;
             _runtime = runtime;
-
-            VTableBuilder builder = AddInterface(IID_IRuntime, validate: false);
-
-            builder.AddMethod(new GetRuntimeConfigurationDelegate(GetRuntimeConfiguration));
-            builder.AddMethod(new GetModuleAddressDelegate(GetModuleAddress));
-            builder.AddMethod(new GetModuleSizeDelegate(GetModuleSize));
-            builder.AddMethod(new SetRuntimeDirectoryDelegate(SetRuntimeDirectory));
-            builder.AddMethod(new GetRuntimeDirectoryDelegate(GetRuntimeDirectory));
-            builder.AddMethod(new GetClrDataProcessDelegate(GetClrDataProcess));
-            builder.AddMethod(new GetCorDebugInterfaceDelegate(GetCorDebugInterface));
-            builder.AddMethod(new GetEEVersionDelegate(GetEEVersion));
-            builder.AddMethod(new GetCDacLoadPolicyDelegate(GetCDacLoadPolicy));
-
-            IRuntime = builder.Complete();
-
-            AddRef();
+            IRuntime = (IntPtr)ComInterfaceMarshaller<IRuntimeGenerated>.ConvertToUnmanaged(this);
         }
 
-        void IDisposable.Dispose()
+        public void Dispose()
         {
+            if (_disposed)
+            {
+                return;
+            }
             Trace.TraceInformation("RuntimeWrapper.Dispose");
-            this.ReleaseWithCheck();
-        }
-
-        protected override void Destroy()
-        {
-            Trace.TraceInformation("RuntimeWrapper.Destroy");
+            _disposed = true;
             if (_corDebugProcess != IntPtr.Zero)
             {
-                ComWrapper.ReleaseWithCheck(_corDebugProcess);
+                Marshal.Release(_corDebugProcess);
                 _corDebugProcess = IntPtr.Zero;
             }
             if (_clrDataProcess != IntPtr.Zero)
             {
-                ComWrapper.ReleaseWithCheck(_clrDataProcess);
+                Marshal.Release(_clrDataProcess);
                 _clrDataProcess = IntPtr.Zero;
             }
             if (_dacHandle != IntPtr.Zero)
@@ -141,64 +127,53 @@ namespace SOS.Hosting
                 DataTarget.PlatformFunctions.FreeLibrary(_dbiHandle);
                 _dbiHandle = IntPtr.Zero;
             }
+            ComInterfaceMarshaller<IRuntimeGenerated>.Free((void*)IRuntime);
+            IRuntime = IntPtr.Zero;
         }
 
-        #region IRuntime (native)
-
-        private RuntimeConfiguration GetRuntimeConfiguration(
-            IntPtr self)
+        int IRuntimeGenerated.GetRuntimeConfiguration()
         {
             switch (_runtime.RuntimeType)
             {
                 case RuntimeType.Desktop:
-                    return RuntimeConfiguration.WindowsDesktop;
+                    return (int)RuntimeConfiguration.WindowsDesktop;
 
                 case RuntimeType.NetCore:
                 case RuntimeType.SingleFile:
                     if (_runtime.Target.OperatingSystem == OSPlatform.Windows)
                     {
-                        return RuntimeConfiguration.WindowsCore;
+                        return (int)RuntimeConfiguration.WindowsCore;
                     }
                     else if (_runtime.Target.OperatingSystem == OSPlatform.Linux || _runtime.Target.OperatingSystem == OSPlatform.OSX)
                     {
-                        return RuntimeConfiguration.UnixCore;
+                        return (int)RuntimeConfiguration.UnixCore;
                     }
                     break;
             }
-            return RuntimeConfiguration.Unknown;
+            return (int)RuntimeConfiguration.Unknown;
         }
 
-        private ulong GetModuleAddress(
-            IntPtr self)
+        ulong IRuntimeGenerated.GetModuleAddress()
         {
             return _runtime.RuntimeModule.ImageBase;
         }
 
-        private ulong GetModuleSize(
-            IntPtr self)
+        ulong IRuntimeGenerated.GetModuleSize()
         {
             return _runtime.RuntimeModule.ImageSize;
         }
 
-        private void SetRuntimeDirectory(
-            IntPtr self,
-            string runtimeModuleDirectory)
+        void IRuntimeGenerated.SetRuntimeDirectory(string runtimeModuleDirectory)
         {
             _runtime.RuntimeModuleDirectory = runtimeModuleDirectory;
         }
 
-        private string GetRuntimeDirectory(
-            IntPtr self)
+        string IRuntimeGenerated.GetRuntimeDirectory()
         {
-            if (_runtime.RuntimeModuleDirectory is not null)
-            {
-                return _runtime.RuntimeModuleDirectory;
-            }
-            return Path.GetDirectoryName(_runtime.RuntimeModule.FileName);
+            return _runtime.RuntimeModuleDirectory ?? Path.GetDirectoryName(_runtime.RuntimeModule.FileName);
         }
 
-        private int GetClrDataProcess(
-            IntPtr self,
+        int IRuntimeGenerated.GetClrDataProcess(
             CDacLoadPolicy policy,
             IntPtr* ppClrDataProcess)
         {
@@ -262,13 +237,12 @@ namespace SOS.Hosting
             return HResult.S_OK;
         }
 
-        private CDacLoadPolicy GetCDacLoadPolicy(IntPtr self)
+        CDacLoadPolicy IRuntimeGenerated.GetCDacLoadPolicy()
         {
             return _services.GetService<ISettingsService>()?.CDacLoadPolicy ?? CDacLoadPolicy.PreferCDac;
         }
 
-        private int GetCorDebugInterface(
-            IntPtr self,
+        int IRuntimeGenerated.GetCorDebugInterface(
             IntPtr* ppCorDebugProcess)
         {
             if (ppCorDebugProcess == null)
@@ -296,8 +270,7 @@ namespace SOS.Hosting
             return HResult.S_OK;
         }
 
-        private int GetEEVersion(
-            IntPtr self,
+        int IRuntimeGenerated.GetEEVersion(
             VS_FIXEDFILEINFO* pFileInfo,
             byte* fileVersionBuffer,
             int fileVersionBufferSizeInBytes)
@@ -343,8 +316,6 @@ namespace SOS.Hosting
             return HResult.S_OK;
         }
 
-        #endregion
-
         private IntPtr CreateClrDataProcessFromDac(IntPtr dacHandle)
         {
             if (dacHandle == IntPtr.Zero)
@@ -370,7 +341,7 @@ namespace SOS.Hosting
             }
             finally
             {
-                dataTarget.ReleaseWithCheck();
+                dataTarget.Dispose();
             }
         }
 
@@ -490,7 +461,7 @@ namespace SOS.Hosting
             }
             finally
             {
-                dataTarget.ReleaseWithCheck();
+                dataTarget.Dispose();
             }
         }
 
@@ -504,7 +475,7 @@ namespace SOS.Hosting
             {
                 if (process != IntPtr.Zero)
                 {
-                    ComWrapper.ReleaseWithCheck(process);
+                    Marshal.Release(process);
                 }
                 return hr < 0 ? hr : HResult.E_NOINTERFACE;
             }
@@ -575,53 +546,5 @@ namespace SOS.Hosting
             Debug.Assert(libraryHandle != IntPtr.Zero);
             return libraryHandle;
         }
-
-        #region IRuntime delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate RuntimeConfiguration GetRuntimeConfigurationDelegate(
-            [In] IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate ulong GetModuleAddressDelegate(
-            [In] IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate ulong GetModuleSizeDelegate(
-            [In] IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate void SetRuntimeDirectoryDelegate(
-            [In] IntPtr self,
-            [In, MarshalAs(UnmanagedType.LPStr)] string runtimeModuleDirectory);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        [return: MarshalAs(UnmanagedType.LPStr)]
-        private delegate string GetRuntimeDirectoryDelegate(
-            [In] IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetClrDataProcessDelegate(
-            [In] IntPtr self,
-            [In] CDacLoadPolicy policy,
-            [Out] IntPtr* ppClrDataProcess);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetCorDebugInterfaceDelegate(
-            [In] IntPtr self,
-            [Out] IntPtr* ppCorDebugProcess);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetEEVersionDelegate(
-            [In] IntPtr self,
-            [Out] VS_FIXEDFILEINFO* pFileInfo,
-            [Out] byte* fileVersionBuffer,
-            [In] int fileVersionBufferSizeInBytes);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate CDacLoadPolicy GetCDacLoadPolicyDelegate(
-            [In] IntPtr self);
-
-        #endregion
     }
 }

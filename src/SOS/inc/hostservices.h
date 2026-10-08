@@ -9,10 +9,9 @@
 
 static const char*  ExtensionsDllName = "SOS.Extensions";
 static const WCHAR* ExtensionsDllNameW = W("SOS.Extensions.dll");
-// These package subdirectories must match DesktopTargetFramework and NetCoreAppMinTargetFramework
-// in Directory.Build.props because the native hosts probe the paths directly.
+// This package subdirectory must match SOSManagedTargetFramework in Directory.Build.props
+// because the native host probes the path directly.
 static const char*  ExtensionsNetCoreSubdirectory = "net8.0";
-static const WCHAR* ExtensionsDesktopSubdirectoryW = W("net462");
 static const char*  ExtensionsClassName = "SOS.Extensions.HostServices";
 static const WCHAR* ExtensionsClassNameW = W("SOS.Extensions.HostServices");
 static const char*  ExtensionsInitializeFunctionName = "Initialize";

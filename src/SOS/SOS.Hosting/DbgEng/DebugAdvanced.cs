@@ -2,36 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
-using System.Runtime.InteropServices;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop.DbgEng;
 
 namespace SOS.Hosting.DbgEng
 {
-    internal sealed unsafe class DebugAdvanced
+    internal sealed unsafe partial class DebugClient
     {
-        internal DebugAdvanced(DebugClient client, SOSHost soshost)
+        int IDebugAdvancedGenerated.GetThreadContext(IntPtr context, uint contextSize)
         {
-            VTableBuilder builder = client.AddInterface(typeof(IDebugAdvanced).GUID, validate: true);
-            builder.AddMethod(new GetThreadContextDelegate(soshost.GetThreadContext));
-            builder.AddMethod(new SetThreadContextDelegate(SOSHost.SetThreadContext));
-            builder.Complete();
+            return _soshost.GetThreadContext(IntPtr.Zero, context, unchecked((int)contextSize));
         }
 
-        #region IDebugAdvanced Delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetThreadContextDelegate(
-            [In] IntPtr self,
-            [In] IntPtr context,
-            [In] int contextSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetThreadContextDelegate(
-            [In] IntPtr self,
-            [In] IntPtr context,
-            [In] int contextSize);
-
-        #endregion
+        int IDebugAdvancedGenerated.SetThreadContext(IntPtr context, uint contextSize) => NotImplemented;
     }
 }

@@ -5,9 +5,11 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using Microsoft.Diagnostics.Shared;
+using SOS.Hosting.Interop;
 
 namespace SOS.Hosting
 {
@@ -161,7 +163,19 @@ namespace SOS.Hosting
                 {
                     throw new EntryPointNotFoundException($"Can not find SOS module initialization function: {SOSInitialize}");
                 }
-                int result = initializeFunc(_hostWrapper.IHost, IntPtr.Zero);
+                int result;
+                unsafe
+                {
+                    void* host = ComInterfaceMarshaller<IHostGenerated>.ConvertToUnmanaged(_hostWrapper);
+                    try
+                    {
+                        result = initializeFunc((IntPtr)host, IntPtr.Zero);
+                    }
+                    finally
+                    {
+                        ComInterfaceMarshaller<IHostGenerated>.Free(host);
+                    }
+                }
                 if (result != 0)
                 {
                     throw new InvalidOperationException($"SOS initialization FAILED 0x{result:X8}");
@@ -184,7 +198,6 @@ namespace SOS.Hosting
                 Microsoft.Diagnostics.Runtime.DataTarget.PlatformFunctions.FreeLibrary(_sosLibrary);
             }
             _sosLibrary = IntPtr.Zero;
-            _hostWrapper.ReleaseWithCheck();
         }
 
         /// <summary>

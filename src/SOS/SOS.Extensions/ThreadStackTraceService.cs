@@ -2,22 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.Runtime.Utilities;
+using SOS.Hosting.Interop;
 
 namespace SOS.Extensions
 {
-    internal sealed unsafe class ThreadStackTraceService : CallableCOMWrapper, IThreadStackTraceService
+    internal sealed unsafe class ThreadStackTraceService : IThreadStackTraceService
     {
-        private static readonly Guid IID_IDebuggerThreadStackTraceService = new("3F0DEFDA-A8A3-43B2-9209-935147C89B58");
+        private readonly IDebuggerThreadStackTraceServiceGenerated _services;
 
-        private ref readonly IDebuggerThreadStackTraceServiceVTable VTable => ref Unsafe.AsRef<IDebuggerThreadStackTraceServiceVTable>(_vtable);
-
-        internal ThreadStackTraceService(IntPtr punk)
-            : base(IID_IDebuggerThreadStackTraceService, punk)
+        internal ThreadStackTraceService(IDebuggerThreadStackTraceServiceGenerated services)
         {
+            _services = services;
         }
 
         public IStack GetDebuggerStackTrace(uint threadId, int maxFrames)
@@ -40,7 +37,7 @@ namespace SOS.Extensions
             uint framesFilled;
             fixed (DebuggerStackFrame* framesPtr = debuggerFrames)
             {
-                result = VTable.GetDebuggerStackTrace(Self, threadId, framesPtr, debuggerFrames.Length, out framesFilled);
+                result = _services.GetDebuggerStackTrace(threadId, framesPtr, (uint)debuggerFrames.Length, out framesFilled);
             }
             if (!result.IsOK)
             {
@@ -53,19 +50,6 @@ namespace SOS.Extensions
             }
 
             return new Stack(debuggerFrames, (int)framesFilled);
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private readonly struct DebuggerStackFrame
-        {
-            public readonly ulong InstructionPointer;
-            public readonly ulong StackPointer;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private readonly struct IDebuggerThreadStackTraceServiceVTable
-        {
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, DebuggerStackFrame*, int, out uint, int> GetDebuggerStackTrace;
         }
 
         private sealed class Stack : IStack

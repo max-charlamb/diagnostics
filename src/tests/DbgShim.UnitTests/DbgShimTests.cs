@@ -542,7 +542,7 @@ namespace Microsoft.Diagnostics
                 IRuntimeService runtimeService = target.Services.GetService<IRuntimeService>();
                 IRuntime runtime = runtimeService.EnumerateRuntimes().Single();
 
-                CorDebugDataTargetWrapper dataTarget = new(target.Services, runtime);
+                using CorDebugDataTargetWrapper dataTarget = new(target.Services, runtime);
                 LibraryProviderWrapper libraryProvider = new(target.OperatingSystem, runtime.RuntimeModule.BuildId, runtime.GetDbiFilePath(), runtime.GetDacFilePath(out bool verifySignature));
                 ClrDebuggingVersion maxDebuggerSupportedVersion = new()
                 {
@@ -552,6 +552,7 @@ namespace Microsoft.Diagnostics
                     Build = 0,
                     Revision = 0,
                 };
+                ClrDebuggingVersion version = default;
                 HResult hr = clrDebugging.OpenVirtualProcess(
                     runtime.RuntimeModule.ImageBase,
                     dataTarget.ICorDebugDataTarget,
@@ -559,14 +560,13 @@ namespace Microsoft.Diagnostics
                     maxDebuggerSupportedVersion,
                     in RuntimeWrapper.IID_ICorDebugProcess,
                     out IntPtr corDebugProcess,
-                    out ClrDebuggingVersion version,
+                    ref version,
                     out ClrDebuggingProcessFlags flags);
 
                 AssertResult(hr);
                 Assert.NotEqual(IntPtr.Zero, corDebugProcess);
                 Assert.Equal(1, COMHelper.Release(corDebugProcess));
                 Assert.Equal(0, COMHelper.Release(corDebugProcess));
-                Assert.Equal(0, clrDebugging.Release());
                 return Task.FromResult(0);
             });
         }
@@ -594,7 +594,7 @@ namespace Microsoft.Diagnostics
                 IRuntimeService runtimeService = target.Services.GetService<IRuntimeService>();
                 IRuntime runtime = runtimeService.EnumerateRuntimes().Single();
 
-                DataTargetWrapper dataTarget = new(target.Services, runtime);
+                using DataTargetWrapper dataTarget = new(target.Services, runtime);
                 LibraryProviderWrapper libraryProvider = new(
                     target.OperatingSystem,
                     runtime.RuntimeModule.BuildId,
@@ -608,6 +608,7 @@ namespace Microsoft.Diagnostics
                     Build = 0,
                     Revision = 0,
                 };
+                ClrDebuggingVersion version = default;
                 HResult hr = clrDebugging.OpenVirtualProcess(
                     runtime.RuntimeModule.ImageBase,
                     dataTarget.IDataTarget,
@@ -615,13 +616,12 @@ namespace Microsoft.Diagnostics
                     maxDebuggerSupportedVersion,
                     in RuntimeWrapper.IID_IXCLRDataProcess,
                     out IntPtr dataProcess,
-                    out _,
+                    ref version,
                     out _);
 
                 AssertResult(hr);
                 Assert.NotEqual(IntPtr.Zero, dataProcess);
                 COMHelper.Release(dataProcess);
-                Assert.Equal(0, clrDebugging.Release());
                 return Task.FromResult(0);
             });
         }
@@ -670,8 +670,8 @@ namespace Microsoft.Diagnostics
             ITarget target = testDump.Target;
             IRuntimeService runtimeService = target.Services.GetService<IRuntimeService>();
             IRuntime runtime = runtimeService.EnumerateRuntimes().Single();
-            DataTargetWrapper clrDataTarget = new(target.Services, runtime);
-            CorDebugDataTargetWrapper corDebugDataTarget = new(target.Services, runtime);
+            using DataTargetWrapper clrDataTarget = new(target.Services, runtime);
+            using CorDebugDataTargetWrapper corDebugDataTarget = new(target.Services, runtime);
             IntPtr dataTarget = route == DataAccessRoute
                 ? clrDataTarget.IDataTarget
                 : corDebugDataTarget.ICorDebugDataTarget;
@@ -695,11 +695,7 @@ namespace Microsoft.Diagnostics
             {
                 AssertResult(DbgShimAPI.CLRCreateInstance(out ICLRDebugging clrDebugging));
                 Assert.NotNull(clrDebugging);
-                AssertResult(COMHelper.QueryInterface(
-                    clrDebugging.InterfacePointer,
-                    ICLRDebuggingPolicy.IID_ICLRDebuggingPolicy,
-                    out IntPtr debuggingPolicyPointer));
-                ICLRDebuggingPolicy debuggingPolicy = ICLRDebuggingPolicy.Create(debuggingPolicyPointer);
+                ICLRDebuggingPolicy debuggingPolicy = (ICLRDebuggingPolicy)clrDebugging;
                 Assert.NotNull(debuggingPolicy);
                 AssertResult(debuggingPolicy.SetCDacLoadPolicy(policy));
                 AssertResult(debuggingPolicy.GetCDacLoadPolicy(out DbgShimCDacLoadPolicy actualPolicy));
@@ -710,6 +706,7 @@ namespace Microsoft.Diagnostics
                     runtime.RuntimeModule.BuildId,
                     runtime.GetDbiFilePath(),
                     runtime.GetDacFilePath(out _));
+                ClrDebuggingVersion version = default;
                 HResult hr = clrDebugging.OpenVirtualProcess(
                     runtime.RuntimeModule.ImageBase,
                     dataTarget,
@@ -717,7 +714,7 @@ namespace Microsoft.Diagnostics
                     maxDebuggerSupportedVersion,
                     in requestedInterface,
                     out IntPtr process,
-                    out _,
+                    ref version,
                     out _);
 
                 if (successExpected)
@@ -733,8 +730,6 @@ namespace Microsoft.Diagnostics
                 }
 
                 Assert.Equal(providerCallsExpected, libraryProvider.CallCount);
-                Assert.Equal(1, debuggingPolicy.Release());
-                Assert.Equal(0, clrDebugging.Release());
             }
             finally
             {

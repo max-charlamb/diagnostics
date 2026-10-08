@@ -2,76 +2,43 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.Runtime.Utilities;
-using SOS.Hosting;
-using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop;
 
 namespace SOS.Extensions.Clrma
 {
-    public sealed class ClrmaServiceWrapper : COMCallableIUnknown
+    [GeneratedComClass]
+    public sealed partial class ClrmaServiceWrapper : IClrmaServiceGenerated
     {
         public const ModuleEnumerationScheme DefaultModuleEnumerationScheme = ModuleEnumerationScheme.EntryPointAndEntryPointDllModule;
-        public static readonly Guid IID_ICLRMAService = new("1FCF4C14-60C1-44E6-84ED-20506EF3DC60");
 
         public const int E_BOUNDS = unchecked((int)0x8000000B);
         public const uint DEBUG_ANY_ID = uint.MaxValue;
 
         private readonly IServiceProvider _serviceProvider;
-        private readonly ServiceWrapper _serviceWrapper;
-        private ICrashInfoService _crashInfoService;
 
-        public ClrmaServiceWrapper(ITarget target, IServiceProvider serviceProvider, ServiceWrapper serviceWrapper)
+        public ClrmaServiceWrapper(IServiceProvider serviceProvider)
         {
             _serviceProvider = serviceProvider;
-            _serviceWrapper = serviceWrapper;
-
-            target.OnFlushEvent.Register(() => _crashInfoService = null);
-
-            VTableBuilder builder = AddInterface(IID_ICLRMAService, validate: false);
-            builder.AddMethod(new AssociateClientDelegate(AssociateClient));
-            builder.AddMethod(new GetThreadDelegate(GetThread));
-            builder.AddMethod(new GetExceptionDelegate(GetException));
-            builder.AddMethod(new GetObjectInspectionDelegate(GetObjectInspection));
-            builder.AddMethod(new SetModuleEnumerationPolicyDelegate((self, moduleEnumerationPolicy) =>
-            {
-                if (moduleEnumerationPolicy < 0 || moduleEnumerationPolicy > (int)ModuleEnumerationScheme.All)
-                {
-                    return HResult.E_INVALIDARG;
-                }
-                ModuleEnumerationScheme = (ModuleEnumerationScheme)moduleEnumerationPolicy;
-                return HResult.S_OK;
-            }));
-            builder.Complete();
-            // Since this wrapper is only created through a ServiceWrapper factory, no AddRef() is needed.
         }
 
         public ModuleEnumerationScheme ModuleEnumerationScheme { get; private set; } = ModuleEnumerationScheme.None;
 
-        protected override void Destroy()
-        {
-            Trace.TraceInformation("ClrmaServiceWrapper.Destroy");
-            _serviceWrapper.RemoveServiceWrapper(ClrmaServiceWrapper.IID_ICLRMAService);
-            _crashInfoService = null;
-        }
-
-        private int AssociateClient(
-            IntPtr self,
-            IntPtr punk)
+        int IClrmaServiceGenerated.AssociateClient(IntPtr punk)
         {
             // If the crash info service doesn't exist, then tell Watson/CLRMA to go on to the next provider
             return CrashInfoService is null ? HResult.E_NOINTERFACE : HResult.S_OK;
         }
 
-        private int GetThread(
-            IntPtr self,
+        int IClrmaServiceGenerated.GetThread(
             uint osThreadId,
-            out IntPtr clrmaClrThread)
+            out IClrmaThreadGenerated clrmaClrThread)
         {
-            clrmaClrThread = IntPtr.Zero;
-            if (CrashInfoService is null)
+            clrmaClrThread = null;
+            ICrashInfoService crashInfoService = CrashInfoService;
+            if (crashInfoService is null)
             {
                 return HResult.E_FAIL;
             }
@@ -80,17 +47,15 @@ namespace SOS.Extensions.Clrma
             {
                 return HResult.E_INVALIDARG;
             }
-            ThreadWrapper threadWrapper = new(CrashInfoService, thread);
-            clrmaClrThread = threadWrapper.ICLRMACClrThread;
+            clrmaClrThread = new ThreadWrapper(crashInfoService, thread);
             return HResult.S_OK;
         }
 
-        private int GetException(
-            IntPtr self,
+        int IClrmaServiceGenerated.GetException(
             ulong address,
-            out IntPtr clrmaClrException)
+            out IClrmaExceptionGenerated clrmaClrException)
         {
-            clrmaClrException = IntPtr.Zero;
+            clrmaClrException = null;
             IException exception = null;
             try
             {
@@ -103,60 +68,28 @@ namespace SOS.Extensions.Clrma
             {
                 return HResult.E_INVALIDARG;
             }
-            ExceptionWrapper exceptionWrapper = new(exception);
-            clrmaClrException = exceptionWrapper.ICLRMACClrException;
+            clrmaClrException = new ExceptionWrapper(exception);
             return HResult.S_OK;
         }
 
-        private int GetObjectInspection(
-            IntPtr self,
-            out IntPtr clrmaObjectInspection)
+        int IClrmaServiceGenerated.GetObjectInspection(out IntPtr clrmaObjectInspection)
         {
             clrmaObjectInspection = IntPtr.Zero;
             return HResult.E_NOTIMPL;
         }
 
-        private ICrashInfoService CrashInfoService
+        int IClrmaServiceGenerated.SetModuleEnumerationPolicy(uint moduleEnumerationPolicy)
         {
-            get
+            if (moduleEnumerationPolicy > (uint)ModuleEnumerationScheme.All)
             {
-                _crashInfoService ??= _serviceProvider.GetService<ICrashInfoService>(); // Use the default exception-based mechanism for obtaining crash info service
-                _crashInfoService ??= _serviceProvider.GetService<ICrashInfoModuleService>()?.Create(ModuleEnumerationScheme); // if the above fails, try to create a crash info service from the modules
-                return _crashInfoService;
+                return HResult.E_INVALIDARG;
             }
+            ModuleEnumerationScheme = (ModuleEnumerationScheme)moduleEnumerationPolicy;
+            return HResult.S_OK;
         }
 
+        private ICrashInfoService CrashInfoService => _serviceProvider.GetService<ICrashInfoService>() ?? _serviceProvider.GetService<ICrashInfoModuleService>()?.Create(ModuleEnumerationScheme);
+
         private IThreadService ThreadService => _serviceProvider.GetService<IThreadService>();
-
-        #region ICLRMAService delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AssociateClientDelegate(
-            [In] IntPtr self,
-            [In] IntPtr punk);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetThreadDelegate(
-            [In] IntPtr self,
-            [In] uint osThreadId,
-            [Out] out IntPtr clrmaClrThread);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetExceptionDelegate(
-            [In] IntPtr self,
-            [In] ulong address,
-            [Out] out IntPtr clrmaClrException);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetObjectInspectionDelegate(
-            [In] IntPtr self,
-            [Out] out IntPtr objectInspection);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetModuleEnumerationPolicyDelegate(
-            [In] IntPtr self,
-            [In] uint moduleEnumerationPolicy);
-
-        #endregion
     }
 }

@@ -220,7 +220,7 @@
   </Options>
 
   <DotNetDumpHost>$(DotNetRoot)/dotnet</DotNetDumpHost>
-  <DotNetDumpPath>$(ArtifactsDir)/bin/dotnet-dump/$(TargetConfiguration)/$(NetCoreAppMinTargetFramework)/publish/dotnet-dump.dll</DotNetDumpPath>
+  <DotNetDumpPath>$(ArtifactsDir)/bin/dotnet-dump/$(TargetConfiguration)/$(SOSManagedTargetFramework)/publish/dotnet-dump.dll</DotNetDumpPath>
   <DebuggeeDumpOutputRootDir>$(DumpDir)/$(TestProduct)/$(RuntimeFrameworkVersion)/$(BuildProjectFramework)</DebuggeeDumpOutputRootDir>
   <DebuggeeDumpInputRootDir>$(DebuggeeDumpOutputRootDir)</DebuggeeDumpInputRootDir>
 

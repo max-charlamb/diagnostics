@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.DebugServices.Implementation;
@@ -16,16 +17,16 @@ using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using SOS.Hosting;
 using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop;
 
 namespace SOS.Extensions
 {
     /// <summary>
     /// The extension services Wrapper the native hosts are given
     /// </summary>
-    public sealed class HostServices : COMCallableIUnknown, SOSLibrary.ISOSModule
+    [GeneratedComClass]
+    public sealed partial class HostServices : IHostServicesGenerated, SOSLibrary.ISOSModule
     {
-        private static readonly Guid IID_IHostServices = new("27B2CB8D-BDEE-4CBD-B6EF-75880D76D46F");
-
         /// <summary>
         /// This is the prototype of the native callback function.
         /// </summary>
@@ -34,8 +35,6 @@ namespace SOS.Extensions
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate int InitializeCallbackDelegate(
             IntPtr hostServices);
-
-        internal IntPtr IHostServices { get; }
 
         internal DebuggerServices DebuggerServices { get; private set; }
 
@@ -46,6 +45,7 @@ namespace SOS.Extensions
         private ServiceContainer _servicesWithManagedOnlyFilter;
         private TargetFromDebuggerServices _targetFromDebuggerServices;
         private ContextServiceFromDebuggerServices _contextServiceFromDebuggerServices;
+        private bool _uninitialized;
 
         /// <summary>
         /// Enable the assembly resolver to get the right versions in the same directory as this assembly.
@@ -122,7 +122,18 @@ namespace SOS.Extensions
             }
             Debug.Assert(Instance == null);
             Instance = new HostServices(extensionPath, extensionLibrary);
-            return initialializeCallback(Instance.IHostServices);
+            unsafe
+            {
+                void* hostServices = ComInterfaceMarshaller<IHostServicesGenerated>.ConvertToUnmanaged(Instance);
+                try
+                {
+                    return initialializeCallback((IntPtr)hostServices);
+                }
+                finally
+                {
+                    ComInterfaceMarshaller<IHostServicesGenerated>.Free(hostServices);
+                }
+            }
         }
 
         private HostServices(string extensionPath, IntPtr extensionsLibrary)
@@ -155,44 +166,16 @@ namespace SOS.Extensions
                 DefaultRetryCount = DefaultRetryCount
             };
 
-            _hostWrapper = new HostWrapper(_host);
-            _hostWrapper.ServiceWrapper.AddServiceWrapper(IID_IHostServices, this);
-
-            VTableBuilder builder = AddInterface(IID_IHostServices, validate: false);
-            builder.AddMethod(new GetHostDelegate(GetHost));
-            builder.AddMethod(new RegisterDebuggerServicesDelegate(RegisterDebuggerServices));
-            builder.AddMethod(new CreateTargetDelegate(CreateTarget));
-            builder.AddMethod(new UpdateTargetDelegate(UpdateTarget));
-            builder.AddMethod(new FlushTargetDelegate(FlushTarget));
-            builder.AddMethod(new DestroyTargetDelegate(DestroyTarget));
-            builder.AddMethod(new DispatchCommandDelegate(DispatchCommand));
-            builder.AddMethod(new UninitializeDelegate(Uninitialize));
-            IHostServices = builder.Complete();
-
-            AddRef();
+            _hostWrapper = new HostWrapper(_host, this);
         }
 
-        protected override void Destroy()
+        int IHostServicesGenerated.GetHost(out IHostGenerated host)
         {
-            Trace.TraceInformation("HostServices.Destroy");
-            _hostWrapper.ServiceWrapper.RemoveServiceWrapper(IID_IHostServices);
-            _hostWrapper.ReleaseWithCheck();
-        }
-
-        #region IHostServices
-
-        private int GetHost(
-            IntPtr self,
-            out IntPtr host)
-        {
-            host = _hostWrapper.IHost;
-            _hostWrapper.AddRef();
+            host = _hostWrapper;
             return HResult.S_OK;
         }
 
-        private int RegisterDebuggerServices(
-            IntPtr self,
-            IntPtr iunk)
+        int IHostServicesGenerated.RegisterDebuggerServices(IntPtr iunk)
         {
             Trace.TraceInformation("HostServices.RegisterDebuggerServices");
             if (iunk == IntPtr.Zero || DebuggerServices != null)
@@ -269,26 +252,15 @@ namespace SOS.Extensions
                 Trace.TraceError(ex.ToString());
                 return HResult.E_FAIL;
             }
-            try
+            if (DebuggerServices.RemoteMemoryService is IRemoteMemoryServiceGenerated remoteMemory)
             {
-                RemoteMemoryService remoteMemoryService = new(iunk);
-                // This service needs another reference since it is implemented as part of IDebuggerServices and gets
-                // disposed in Uninitialize() below by the DisposeServices call.
-                remoteMemoryService.AddRef();
-                _host.ServiceContainer.AddService<IRemoteMemoryService>(remoteMemoryService);
+                _host.ServiceContainer.AddService<IRemoteMemoryService>(new RemoteMemoryService(remoteMemory));
             }
-            catch (InvalidCastException)
+            if (DebuggerServices.ThreadStackTraceService is IDebuggerThreadStackTraceServiceGenerated threadStackTrace)
             {
+                _host.ServiceContainer.AddService<IThreadStackTraceService>(new ThreadStackTraceService(threadStackTrace));
             }
-            try
-            {
-                ThreadStackTraceService threadStackTraceService = new(iunk);
-                // This service needs another reference since it is implemented as part of IDebuggerServices and gets
-                // disposed in Uninitialize() below by the DisposeServices call.
-                threadStackTraceService.AddRef();
-                _host.ServiceContainer.AddService<IThreadStackTraceService>(threadStackTraceService);
-            }
-            catch (InvalidCastException)
+            else
             {
                 Trace.TraceInformation("Debugger stack trace service is not available.");
             }
@@ -307,8 +279,7 @@ namespace SOS.Extensions
             return HResult.S_OK;
         }
 
-        private int CreateTarget(
-            IntPtr self)
+        int IHostServicesGenerated.CreateTarget()
         {
             Trace.TraceInformation("HostServices.CreateTarget");
             if (_targetFromDebuggerServices != null || DebuggerServices == null)
@@ -328,32 +299,29 @@ namespace SOS.Extensions
             return HResult.S_OK;
         }
 
-        private int UpdateTarget(
-            IntPtr self,
-            uint processId)
+        int IHostServicesGenerated.UpdateTarget(uint processId)
         {
             Trace.TraceInformation("HostServices.UpdateTarget {0} #{1}", processId, _targetFromDebuggerServices != null ? _targetFromDebuggerServices.Id : "<none>");
+            IHostServicesGenerated hostServices = this;
             if (_targetFromDebuggerServices == null)
             {
-                return CreateTarget(self);
+                return hostServices.CreateTarget();
             }
             else if (_targetFromDebuggerServices.ProcessId.GetValueOrDefault() != processId)
             {
-                DestroyTarget(self);
-                return CreateTarget(self);
+                hostServices.DestroyTarget();
+                return hostServices.CreateTarget();
             }
             return HResult.S_OK;
         }
 
-        private void FlushTarget(
-            IntPtr self)
+        void IHostServicesGenerated.FlushTarget()
         {
             Trace.TraceInformation("HostServices.FlushTarget");
             _targetFromDebuggerServices?.Flush();
         }
 
-        private void DestroyTarget(
-            IntPtr self)
+        void IHostServicesGenerated.DestroyTarget()
         {
             Trace.TraceInformation("HostServices.DestroyTarget #{0}", _targetFromDebuggerServices != null ? _targetFromDebuggerServices.Id : "<none>");
             try
@@ -367,8 +335,7 @@ namespace SOS.Extensions
             }
         }
 
-        private int DispatchCommand(
-            IntPtr self,
+        int IHostServicesGenerated.DispatchCommand(
             string commandName,
             string commandArguments,
             bool displayCommandNotFound)
@@ -402,10 +369,14 @@ namespace SOS.Extensions
             return HResult.S_OK;
         }
 
-        private void Uninitialize(
-            IntPtr self)
+        void IHostServicesGenerated.Uninitialize()
         {
+            if (_uninitialized)
+            {
+                return;
+            }
             Trace.TraceInformation("HostServices.Uninitialize");
+            _uninitialized = true;
             try
             {
                 _host.DestoryTargets();
@@ -414,27 +385,22 @@ namespace SOS.Extensions
                 // Send shutdown event on exit
                 _host.OnShutdownEvent.Fire();
 
-                // This turns off any logging to console now that debugger services will be released and the console service will no longer work.
+                // Stop console logging before debugger services are removed and the console service stops working.
                 DiagnosticLoggingService.Instance.SetConsole(consoleService: null, fileLoggingService: null);
 
-                // Dispose of the global services, including DebuggerServices and RemoteMemoryService, but not host services (this)
+                // Dispose of global resources and clear cached services, but not host services (this).
                 _host.ServiceContainer.DisposeServices();
 
                 DebuggerServices = null;
 
                 // Clear HostService instance
                 Instance = null;
-
-                // Release the host services wrapper
-                this.ReleaseWithCheck();
             }
             catch (Exception ex)
             {
                 Trace.TraceError(ex.ToString());
             }
         }
-
-        #endregion
 
         #region HostForHostServices
 
@@ -478,48 +444,6 @@ namespace SOS.Extensions
         public string SOSPath { get; }
 
         public IntPtr SOSHandle { get; }
-
-        #endregion
-
-        #region IHostServices delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetHostDelegate(
-            [In] IntPtr self,
-            [Out] out IntPtr host);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int RegisterDebuggerServicesDelegate(
-            [In] IntPtr self,
-            [In] IntPtr iunk);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int CreateTargetDelegate(
-            [In] IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int UpdateTargetDelegate(
-            [In] IntPtr self,
-            [In] uint processId);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate void FlushTargetDelegate(
-            [In] IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate void DestroyTargetDelegate(
-            [In] IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int DispatchCommandDelegate(
-            [In] IntPtr self,
-            [In, MarshalAs(UnmanagedType.LPStr)] string commandName,
-            [In, MarshalAs(UnmanagedType.LPStr)] string commandArguments,
-            bool displayCommandNotFound);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate void UninitializeDelegate(
-            [In] IntPtr self);
 
         #endregion
     }

@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.DebugServices.Implementation;
@@ -15,50 +16,55 @@ using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using SOS.Hosting;
 using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop;
+using SOS.Hosting.Interop.DbgEng;
 
 namespace SOS.Extensions
 {
-    internal sealed unsafe class DebuggerServices : CallableCOMWrapper, SOSHost.INativeDebugger
+    internal sealed unsafe class DebuggerServices : SOSHost.INativeDebugger
     {
-        internal enum OperatingSystem
-        {
-            Unknown = 0,
-            Windows = 1,
-            Linux = 2,
-            OSX = 3,
-        };
-
-        private static Guid IID_IDebuggerServices = new("B4640016-6CA0-468E-BA2C-1FFF28DE7B72");
-
-        private ref readonly IDebuggerServicesVTable VTable => ref Unsafe.AsRef<IDebuggerServicesVTable>(_vtable);
+        private readonly IDebuggerServicesGenerated _services;
 
         private readonly HostType _hostType;
         private readonly HResult _symbolOptionsResult = HResult.S_OK;
 
         /// <summary>
-        /// A pointer to the underlying IDebugClient interface if the host is DbgEng.
+        /// The underlying DbgEng client, if available.
         /// </summary>
-        public IDebugClient5 DebugClient { get; }
+        public IDebugClient5Generated DebugClient { get; }
+
+        public IDebugSymbols5Generated DebugSymbols { get; }
+
+        public IRemoteMemoryServiceGenerated RemoteMemoryService => _services as IRemoteMemoryServiceGenerated;
+
+        public IDebuggerThreadStackTraceServiceGenerated ThreadStackTraceService => _services as IDebuggerThreadStackTraceServiceGenerated;
 
         internal DebuggerServices(IntPtr punk, HostType hostType)
-            : base(IID_IDebuggerServices, punk)
         {
             _hostType = hostType;
-
-            // This uses COM marshalling code, so we also check that the OSPlatform is Windows.
-            if (hostType == HostType.DbgEng && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            try
             {
-                object obj = Marshal.GetObjectForIUnknown(punk);
-                if (obj is IDebugClient5 client)
+                _services = ComInterfaceMarshaller<IDebuggerServicesGenerated>.ConvertToManaged((void*)punk);
+            }
+            finally
+            {
+                ComInterfaceMarshaller<IDebuggerServicesGenerated>.Free((void*)punk);
+            }
+            if (_services == null)
+            {
+                throw new InvalidCastException("DebuggerServices: IDebuggerServices is not available.");
+            }
+
+            if (hostType == HostType.DbgEng && _services is IDebugClient5Generated client)
+            {
+                DebugClient = client;
+                if (_services is IDebugSymbols5Generated symbols)
                 {
-                    DebugClient = client;
-                    if (client is IDebugSymbols5 symbols)
-                    {
-                        // NativeAOT emits debugger-friendly CodeView display names while retaining stable, reversible
-                        // COFF public names used by diagnostic tooling. Prefer the public names for SOS lookups.
-                        // See https://github.com/dotnet/runtime/pull/132735.
-                        _symbolOptionsResult = symbols.AddSymbolOptions(SYMOPT.PUBLICS_ONLY);
-                    }
+                    DebugSymbols = symbols;
+                    // NativeAOT emits debugger-friendly CodeView display names while retaining stable, reversible
+                    // COFF public names used by diagnostic tooling. Prefer the public names for SOS lookups.
+                    // See https://github.com/dotnet/runtime/pull/132735.
+                    _symbolOptionsResult = DebugSymbols.AddSymbolOptions(SYMOPT.PUBLICS_ONLY);
                 }
             }
         }
@@ -67,32 +73,46 @@ namespace SOS.Extensions
 
         public IntPtr GetNativeClient()
         {
+            Guid iid;
             if (_hostType == HostType.DbgEng)
             {
-                return QueryInterface(typeof(IDebugClient).GUID);
+                iid = typeof(IDebugClientGenerated).GUID;
             }
             else if (_hostType == HostType.Lldb)
             {
-                return QueryInterface(LLDBServices.IID_ILLDBServices);
+                iid = LLDBServices.IID_ILLDBServices;
             }
-            throw new InvalidOperationException($"DebuggerServices.GetNativeClient: invalid host type {_hostType}");
+            else
+            {
+                throw new InvalidOperationException($"DebuggerServices.GetNativeClient: invalid host type {_hostType}");
+            }
+            void* services = ComInterfaceMarshaller<IDebuggerServicesGenerated>.ConvertToUnmanaged(_services);
+            try
+            {
+                HResult hr = Marshal.QueryInterface((IntPtr)services, in iid, out IntPtr client);
+                return hr.IsOK ? client : IntPtr.Zero;
+            }
+            finally
+            {
+                ComInterfaceMarshaller<IDebuggerServicesGenerated>.Free(services);
+            }
         }
 
         #endregion
 
-        public HResult GetOperatingSystem(out OperatingSystem operatingSystem)
+        public HResult GetOperatingSystem(out IDebuggerServicesGenerated.OperatingSystem operatingSystem)
         {
-            return VTable.GetOperatingSystem(Self, out operatingSystem);
+            return _services.GetOperatingSystem(out operatingSystem);
         }
 
         public HResult GetDebuggeeType(out DEBUG_CLASS debugClass, out DEBUG_CLASS_QUALIFIER qualifier)
         {
-            return VTable.GetDebuggeeType(Self, out debugClass, out qualifier);
+            return _services.GetDebuggeeType(out debugClass, out qualifier);
         }
 
         public HResult GetProcessorType(out IMAGE_FILE_MACHINE type)
         {
-            return VTable.GetProcessorType(Self, out type);
+            return _services.GetProcessorType(out type);
         }
 
         public HResult AddCommand(string command, string help, IEnumerable<string> aliases)
@@ -111,7 +131,7 @@ namespace SOS.Extensions
                 fixed (byte* helpPtr = helpBytes)
                 fixed (IntPtr* aliasesPtr = aliasHandles)
                 {
-                    return VTable.AddCommand(Self, commandPtr, helpPtr, aliasesPtr, aliasHandles.Length);
+                    return _services.AddCommand(commandPtr, helpPtr, aliasesPtr, aliasHandles.Length);
                 }
             }
             finally
@@ -133,7 +153,7 @@ namespace SOS.Extensions
             byte[] messageBytes = Encoding.ASCII.GetBytes(message + "\0");
             fixed (byte* messagePtr = messageBytes)
             {
-                VTable.OutputString(Self, mask, messagePtr);
+                _services.OutputString(mask, messagePtr);
             }
         }
 
@@ -141,7 +161,7 @@ namespace SOS.Extensions
         {
             fixed (byte* bufferPtr = buffer)
             {
-                return VTable.ReadVirtual(Self, offset, bufferPtr, (uint)buffer.Length, out bytesRead);
+                return _services.ReadVirtual(offset, bufferPtr, (uint)buffer.Length, out bytesRead);
             }
         }
 
@@ -149,13 +169,13 @@ namespace SOS.Extensions
         {
             fixed (byte* bufferPtr = buffer)
             {
-                return VTable.WriteVirtual(Self, offset, bufferPtr, (uint)buffer.Length, out bytesWritten);
+                return _services.WriteVirtual(offset, bufferPtr, (uint)buffer.Length, out bytesWritten);
             }
         }
 
         public HResult GetNumberModules(out uint loaded, out uint unloaded)
         {
-            return VTable.GetNumberModules(Self, out loaded, out unloaded);
+            return _services.GetNumberModules(out loaded, out unloaded);
         }
 
         public HResult GetModuleName(int index, out string imageName)
@@ -168,8 +188,7 @@ namespace SOS.Extensions
             byte[] imageNameBuffer = new byte[1024];
             fixed (byte* imageNameBufferPtr = imageNameBuffer)
             {
-                HResult hr = VTable.GetModuleNames(
-                    Self,
+                HResult hr = _services.GetModuleNames(
                     (uint)index,
                     0,
                     imageNameBufferPtr,
@@ -199,21 +218,21 @@ namespace SOS.Extensions
 
         public HResult GetModuleInfo(int index, out ulong moduleBase, out ulong moduleSize, out uint timestamp, out uint checksum)
         {
-            return VTable.GetModuleInfo(Self, (uint)index, out moduleBase, out moduleSize, out timestamp, out checksum);
+            return _services.GetModuleInfo((uint)index, out moduleBase, out moduleSize, out timestamp, out checksum);
         }
 
         private static readonly byte[] s_getVersionInfo = Encoding.ASCII.GetBytes("\\\0");
 
         public HResult GetModuleVersionInformation(int index, out VS_FIXEDFILEINFO fileInfo)
         {
-            int versionBufferSize = Marshal.SizeOf(typeof(VS_FIXEDFILEINFO));
+            int versionBufferSize = Marshal.SizeOf<VS_FIXEDFILEINFO>();
             byte[] versionBuffer = new byte[versionBufferSize];
             fileInfo = default;
 
             fixed (byte* getVersionInfoPtr = s_getVersionInfo)
             fixed (byte* versionBufferPtr = versionBuffer)
             {
-                HResult hr = VTable.GetModuleVersionInformation(Self, (uint)index, 0, getVersionInfoPtr, versionBufferPtr, (uint)versionBufferSize, null);
+                HResult hr = _services.GetModuleVersionInformation((uint)index, 0, getVersionInfoPtr, versionBufferPtr, (uint)versionBufferSize, null);
                 if (hr == HResult.S_OK)
                 {
                     fileInfo = *((VS_FIXEDFILEINFO*)versionBufferPtr);
@@ -232,7 +251,7 @@ namespace SOS.Extensions
             fixed (byte* getVersionStringPtr = s_getVersionString)
             fixed (byte* versionBufferPtr = versionBuffer)
             {
-                int hr = VTable.GetModuleVersionInformation(Self, (uint)index, 0, getVersionStringPtr, versionBufferPtr, (uint)versionBuffer.Length, null);
+                int hr = _services.GetModuleVersionInformation((uint)index, 0, getVersionStringPtr, versionBufferPtr, (uint)versionBuffer.Length, null);
                 if (hr == HResult.S_OK)
                 {
                     version = Marshal.PtrToStringAnsi(new IntPtr(versionBufferPtr));
@@ -243,7 +262,7 @@ namespace SOS.Extensions
 
         public HResult GetNumberThreads(out uint number)
         {
-            return VTable.GetNumberThreads(Self, out number);
+            return _services.GetNumberThreads(out number);
         }
 
         public HResult GetThreadIdsByIndex(uint start, uint count, uint[] ids, uint[] sysIds)
@@ -262,7 +281,7 @@ namespace SOS.Extensions
             {
                 fixed (uint* psysIds = sysIds)
                 {
-                    return VTable.GetThreadIdsByIndex(Self, start, count, pids, psysIds);
+                    return _services.GetThreadIdsByIndex(start, count, pids, psysIds);
                 }
             }
         }
@@ -271,39 +290,37 @@ namespace SOS.Extensions
         {
             fixed (byte* contextPtr = context)
             {
-                return VTable.GetThreadContextBySystemId(Self, threadId, contextFlags, (uint)context.Length, contextPtr);
+                return _services.GetThreadContextBySystemId(threadId, contextFlags, (uint)context.Length, contextPtr);
             }
         }
 
         public HResult GetCurrentProcessId(out uint processId)
         {
-            return VTable.GetCurrentProcessSystemId(Self, out processId);
+            return _services.GetCurrentProcessSystemId(out processId);
         }
 
         public HResult GetCurrentThreadId(out uint threadId)
         {
-            return VTable.GetCurrentThreadSystemId(Self, out threadId);
+            return _services.GetCurrentThreadSystemId(out threadId);
         }
 
         public HResult SetCurrentThreadId(uint threadId)
         {
-            return VTable.SetCurrentThreadSystemId(Self, threadId);
+            return _services.SetCurrentThreadSystemId(threadId);
         }
 
         public HResult GetThreadTeb(uint threadId, out ulong teb)
         {
             // The native code may not zero out this return pointer
-#pragma warning disable IDE0059 // Unnecessary assignment of a value
             teb = 0;
-#pragma warning restore IDE0059 // Unnecessary assignment of a value
-            return VTable.GetThreadTeb(Self, threadId, out teb);
+            return _services.GetThreadTeb(threadId, ref teb);
         }
 
         public HResult VirtualUnwind(uint threadId, Span<byte> context)
         {
             fixed (byte* contextPtr = context)
             {
-                return VTable.VirtualUnwind(Self, threadId, context.Length, contextPtr);
+                return _services.VirtualUnwind(threadId, (uint)context.Length, contextPtr);
             }
         }
 
@@ -312,7 +329,7 @@ namespace SOS.Extensions
             symbolPath = null;
 
             // Get the path length first
-            HResult hr = VTable.GetSymbolPath(Self, null, 0, out uint pathSize);
+            HResult hr = _services.GetSymbolPath(null, 0, out uint pathSize);
             if (hr == HResult.S_OK)
             {
                 if (pathSize > 0)
@@ -321,7 +338,7 @@ namespace SOS.Extensions
                     byte[] buffer = new byte[pathSize];
                     fixed (byte* bufferPtr = buffer)
                     {
-                        hr = VTable.GetSymbolPath(Self, bufferPtr, (uint)buffer.Length, out pathSize);
+                        hr = _services.GetSymbolPath(bufferPtr, (uint)buffer.Length, out pathSize);
                         if (hr == HResult.S_OK)
                         {
                             symbolPath = Encoding.ASCII.GetString(bufferPtr, (int)pathSize - 1);
@@ -348,7 +365,7 @@ namespace SOS.Extensions
             symbol = null;
 
             // Get the symbol length first
-            HResult hr = VTable.GetSymbolByOffset(Self, moduleIndex, address, null, 0, out uint symbolSize, out displacement);
+            HResult hr = _services.GetSymbolByOffset((uint)moduleIndex, address, null, 0, out uint symbolSize, out displacement);
             if (hr == HResult.S_OK)
             {
                 if (symbolSize > 0)
@@ -357,7 +374,7 @@ namespace SOS.Extensions
                     byte[] symbolBuffer = new byte[symbolSize];
                     fixed (byte* symbolBufferPtr = symbolBuffer)
                     {
-                        hr = VTable.GetSymbolByOffset(Self, moduleIndex, address, symbolBufferPtr, symbolBuffer.Length, out symbolSize, out displacement);
+                        hr = _services.GetSymbolByOffset((uint)moduleIndex, address, symbolBufferPtr, (uint)symbolBuffer.Length, out symbolSize, out displacement);
                         if (hr == HResult.S_OK)
                         {
                             symbol = Encoding.ASCII.GetString(symbolBufferPtr, (int)symbolSize - 1);
@@ -390,7 +407,7 @@ namespace SOS.Extensions
             byte[] symbolBytes = Encoding.ASCII.GetBytes(symbol + "\0");
             fixed (byte* symbolPtr = symbolBytes)
             {
-                return VTable.GetOffsetBySymbol(Self, moduleIndex, symbolPtr, out address);
+                return _services.GetOffsetBySymbol((uint)moduleIndex, symbolPtr, out address);
             }
         }
 
@@ -404,7 +421,7 @@ namespace SOS.Extensions
             byte[] typeNameBytes = Encoding.ASCII.GetBytes(typeName + "\0");
             fixed (byte* typeNamePtr = typeNameBytes)
             {
-                return VTable.GetTypeId(Self, moduleIndex, typeNamePtr, out typeId);
+                return _services.GetTypeId((uint)moduleIndex, typeNamePtr, out typeId);
             }
         }
 
@@ -420,18 +437,18 @@ namespace SOS.Extensions
             fixed (byte* typeNamePtr = typeNameBytes)
             fixed (byte* fieldNamePtr = fieldNameBytes)
             {
-                return VTable.GetFieldOffset(Self, moduleIndex, typeNamePtr, typeId, fieldNamePtr, out offset);
+                return _services.GetFieldOffset((uint)moduleIndex, typeNamePtr, typeId, fieldNamePtr, out offset);
             }
         }
 
-        public int GetOutputWidth() => (int)VTable.GetOutputWidth(Self);
+        public int GetOutputWidth() => (int)_services.GetOutputWidth();
 
         public bool SupportsDml
         {
             get
             {
                 uint supported = 0;
-                VTable.SupportsDml(Self, &supported);
+                _services.SupportsDml(&supported);
                 return supported != 0;
             }
         }
@@ -446,7 +463,7 @@ namespace SOS.Extensions
             byte[] messageBytes = Encoding.ASCII.GetBytes(message + "\0");
             fixed (byte* messagePtr = messageBytes)
             {
-                VTable.OutputDmlString(Self, mask, messagePtr);
+                _services.OutputDmlString(mask, messagePtr);
             }
         }
 
@@ -459,7 +476,7 @@ namespace SOS.Extensions
             byte[] symbolFileNameBytes = Encoding.ASCII.GetBytes(symbolFileName + "\0");
             fixed (byte* ptr = symbolFileNameBytes)
             {
-                return VTable.AddModuleSymbol(Self, IntPtr.Zero, ptr);
+                return _services.AddModuleSymbol(IntPtr.Zero, ptr);
             }
         }
 
@@ -468,7 +485,7 @@ namespace SOS.Extensions
             exceptionRecord = default;
 
             uint type;
-            HResult hr = VTable.GetLastEventInformation(Self, out type, out processId, out threadId, null, 0, null, null, 0, null);
+            HResult hr = _services.GetLastEventInformation(out type, out processId, out threadId, null, 0, null, null, 0, null);
             if (hr.IsOK)
             {
                 if (type != (uint)DEBUG_EVENT.EXCEPTION)
@@ -478,13 +495,12 @@ namespace SOS.Extensions
             }
 
             DEBUG_LAST_EVENT_INFO_EXCEPTION exceptionInfo;
-            hr = VTable.GetLastEventInformation(
-                Self,
+            hr = _services.GetLastEventInformation(
                 out _,
                 out processId,
                 out threadId,
                 &exceptionInfo,
-                Unsafe.SizeOf<DEBUG_LAST_EVENT_INFO_EXCEPTION>(),
+                (uint)Unsafe.SizeOf<DEBUG_LAST_EVENT_INFO_EXCEPTION>(),
                 null,
                 null,
                 0,
@@ -500,7 +516,7 @@ namespace SOS.Extensions
 
         public void FlushCheck()
         {
-            VTable.FlushCheck(Self);
+            _services.FlushCheck();
         }
 
         public IReadOnlyList<string> ExecuteHostCommand(string commandLine, DEBUG_OUTPUT interestMask = DEBUG_OUTPUT.NORMAL)
@@ -524,7 +540,7 @@ namespace SOS.Extensions
             byte[] commandLineBytes = Encoding.ASCII.GetBytes(commandLine + "\0");
             fixed (byte* ptr = commandLineBytes)
             {
-                HResult hr = VTable.ExecuteHostCommand(Self, ptr, callbackPtr);
+                HResult hr = _services.ExecuteHostCommand(ptr, callbackPtr);
                 if (!hr.IsOK)
                 {
                     throw new DiagnosticsException($"{commandLine} FAILED {hr}");
@@ -536,52 +552,13 @@ namespace SOS.Extensions
         {
             value = false;
             int dacSignatureVerificationEnabled = 0;
-            HResult hr = VTable.GetDacSignatureVerificationSettings(Self, &dacSignatureVerificationEnabled);
+            HResult hr = _services.GetDacSignatureVerificationSettings(&dacSignatureVerificationEnabled);
             if (!hr.IsOK)
             {
                 return hr;
             }
             value = dacSignatureVerificationEnabled != 0;
             return HResult.S_OK;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private readonly unsafe struct IDebuggerServicesVTable
-        {
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, out OperatingSystem, int> GetOperatingSystem;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, out DEBUG_CLASS, out DEBUG_CLASS_QUALIFIER, int> GetDebuggeeType;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, out IMAGE_FILE_MACHINE, int> GetProcessorType;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, byte*, byte*, IntPtr*, int, int> AddCommand;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, DEBUG_OUTPUT, byte*, void> OutputString;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, ulong, byte*, uint, out int, int> ReadVirtual;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, ulong, byte*, uint, out int, int> WriteVirtual;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, out uint, out uint, int> GetNumberModules;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, out ulong, int> GetModuleByIndex;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, ulong, byte*, uint, out uint, byte*, uint, uint*, byte*, uint, uint*, int> GetModuleNames;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, out ulong, out ulong, out uint, out uint, int> GetModuleInfo;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, ulong, byte*, byte*, uint, uint*, int> GetModuleVersionInformation;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, byte*, uint, out uint, out ulong, int> GetModuleByModuleName;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, out uint, int> GetNumberThreads;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, uint, uint*, uint*, int> GetThreadIdsByIndex;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, uint, uint, byte*, int> GetThreadContextBySystemId;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, out uint, int> GetCurrentProcessSystemId;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, out uint, int> GetCurrentThreadSystemId;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, int> SetCurrentThreadSystemId;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, out ulong, int> GetThreadTeb;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint, int, byte*, int> VirtualUnwind;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, byte*, uint, out uint, int> GetSymbolPath;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, int, ulong, byte*, int, out uint, out ulong, int> GetSymbolByOffset;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, int, byte*, out ulong, int> GetOffsetBySymbol;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, int, byte*, out ulong, HResult> GetTypeId;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, int, byte*, ulong, byte*, out uint, HResult> GetFieldOffset;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint> GetOutputWidth;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, uint*, int> SupportsDml;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, DEBUG_OUTPUT, byte*, void> OutputDmlString;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, IntPtr, byte*, int> AddModuleSymbol;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, out uint, out uint, out int, void*, int, uint*, byte*, int, uint*, int> GetLastEventInformation;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, void> FlushCheck;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, byte*, IntPtr, int> ExecuteHostCommand;
-            public readonly delegate* unmanaged[Stdcall]<IntPtr, int*, int> GetDacSignatureVerificationSettings;
         }
     }
 }

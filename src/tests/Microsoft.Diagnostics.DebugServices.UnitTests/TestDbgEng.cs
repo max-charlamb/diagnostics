@@ -51,7 +51,6 @@ namespace Microsoft.Diagnostics.DebugServices.UnitTests
                 ref Guid interfaceId,
                 [MarshalAs(UnmanagedType.IUnknown)] out object iinterface);
 
-            private static readonly Guid _iidClient = new("e3acb9d7-7ec2-4f0c-a0da-e81e0cbbe628");
             private readonly CharToLineConverter _converter;
 
             internal readonly IDebugClient Client;
@@ -70,7 +69,7 @@ namespace Microsoft.Diagnostics.DebugServices.UnitTests
                 {
                     throw new DiagnosticsException($"DebugCreate export not found");
                 }
-                Guid iid = _iidClient;
+                Guid iid = typeof(IDebugClient5).GUID;
                 HResult hr = debugCreate(ref iid, out object client);
                 if (hr != HResult.S_OK)
                 {

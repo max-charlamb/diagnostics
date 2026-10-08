@@ -98,7 +98,7 @@
     </ItemGroup>
     <Error Condition="!Exists('%(_SOSRequiredInput.Identity)')"
            Text="Required SOS Helix input '%(_SOSRequiredInput.Identity)' was not found in the prebuilt artifacts." />
-    <Error Condition="!Exists('$(ArtifactsBinDir)dotnet-dump/$(Configuration)/net8.0/dotnet-dump.dll') and !Exists('$(ArtifactsBinDir)dotnet-dump/$(Configuration)/net8.0/publish/dotnet-dump.dll')"
+    <Error Condition="!Exists('$(ArtifactsBinDir)dotnet-dump/$(Configuration)/$(SOSManagedTargetFramework)/dotnet-dump.dll') and !Exists('$(ArtifactsBinDir)dotnet-dump/$(Configuration)/$(SOSManagedTargetFramework)/publish/dotnet-dump.dll')"
            Text="dotnet-dump was not found under '$(ArtifactsBinDir)dotnet-dump/$(Configuration)'." />
 
     <RemoveDir Directories="$(SOSHelixPayloadDir)" />

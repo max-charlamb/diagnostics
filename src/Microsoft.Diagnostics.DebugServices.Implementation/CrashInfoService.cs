@@ -16,6 +16,7 @@ namespace Microsoft.Diagnostics.DebugServices.Implementation
     public sealed class CrashInfoModuleService : ICrashInfoModuleService
     {
         private readonly IServiceProvider Services;
+        private readonly Dictionary<ModuleEnumerationScheme, ICrashInfoService> _crashInfoServices = [];
 
         public CrashInfoModuleService(IServiceProvider services)
         {
@@ -23,7 +24,12 @@ namespace Microsoft.Diagnostics.DebugServices.Implementation
         }
         public ICrashInfoService Create(ModuleEnumerationScheme moduleEnumerationScheme)
         {
-            return CreateCrashInfoServiceFromModule(Services, moduleEnumerationScheme);
+            if (!_crashInfoServices.TryGetValue(moduleEnumerationScheme, out ICrashInfoService crashInfoService))
+            {
+                crashInfoService = CreateCrashInfoServiceFromModule(Services, moduleEnumerationScheme);
+                _crashInfoServices.Add(moduleEnumerationScheme, crashInfoService);
+            }
+            return crashInfoService;
         }
 
         private static bool CreateCrashInfoServiceForModule(IModule module, out ICrashInfoService crashInfoService)

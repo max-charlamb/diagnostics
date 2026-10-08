@@ -43,7 +43,8 @@ namespace Microsoft.Diagnostics.DebugServices
     public interface ICrashInfoModuleService
     {
         /// <summary>
-        /// Create a crash info service
+        /// Gets or creates crash information for the specified module enumeration scheme.
+        /// Results, including missing crash information, are cached for the lifetime of this service instance.
         /// </summary>
         /// <param name="moduleEnumerationScheme">module enumeration scheme</param>
         /// <returns>ICrashInfoService</returns>

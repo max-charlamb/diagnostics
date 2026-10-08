@@ -6,11 +6,14 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using SOS.Hosting.DbgEng;
 using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop;
+using SOS.Hosting.Interop.DbgEng;
 using Architecture = System.Runtime.InteropServices.Architecture;
 
 namespace SOS.Hosting {
@@ -57,11 +60,12 @@ namespace SOS.Hosting {
 
         private readonly IntPtr _client;
         private readonly ulong _ignoreAddressBitsMask;
+        private bool _disposed;
 
         /// <summary>
         /// Create an instance of the hosting class. Has the lifetime of the target.
         /// </summary>
-        public SOSHost(ITarget target, IMemoryService memoryService, [ServiceImport(Optional = true)] INativeDebugger nativeDebugger)
+        public unsafe SOSHost(ITarget target, IMemoryService memoryService, [ServiceImport(Optional = true)] INativeDebugger nativeDebugger)
         {
             Target = target;
             MemoryService = memoryService;
@@ -76,13 +80,11 @@ namespace SOS.Hosting {
             {
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    DebugClient debugClient = new(this);
-                    _client = debugClient.IDebugClient;
+                    _client = (IntPtr)ComInterfaceMarshaller<IDebugClientGenerated>.ConvertToUnmanaged(new DebugClient(this));
                 }
                 else
                 {
-                    LLDBServices lldbServices = new(this);
-                    _client = lldbServices.ILLDBServices;
+                    _client = (IntPtr)ComInterfaceMarshaller<ILLDBServicesGenerated>.ConvertToUnmanaged(new LLDBServices(this));
                 }
             }
             Debug.Assert(_client != IntPtr.Zero);
@@ -90,8 +92,13 @@ namespace SOS.Hosting {
 
         void IDisposable.Dispose()
         {
+            if (_disposed)
+            {
+                return;
+            }
+            _disposed = true;
             Trace.TraceInformation($"SOSHost.Dispose");
-            ComWrapper.ReleaseWithCheck(_client);
+            Marshal.Release(_client);
         }
 
         /// <summary>
@@ -99,14 +106,22 @@ namespace SOS.Hosting {
         /// </summary>
         /// <param name="command">just the command name</param>
         /// <param name="arguments">the command arguments and options</param>
-        public void ExecuteCommand(string command, string arguments) => _sosLibrary.ExecuteCommand(_client, command, arguments);
+        public void ExecuteCommand(string command, string arguments)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _sosLibrary.ExecuteCommand(_client, command, arguments);
+        }
 
         /// <summary>
         /// Get the detailed help text for a native SOS command.
         /// </summary>
         /// <param name="command">command name</param>
         /// <returns>help text or null if not found or error</returns>
-        public string GetHelpText(string command) => _sosLibrary.GetHelpText(command);
+        public string GetHelpText(string command)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _sosLibrary.GetHelpText(command);
+        }
 
         #region Reverse PInvoke Implementations
 
@@ -464,7 +479,7 @@ namespace SOS.Hosting {
             }
             if (item == "\\")
             {
-                int versionSize = Marshal.SizeOf(typeof(VS_FIXEDFILEINFO));
+                int versionSize = Marshal.SizeOf<VS_FIXEDFILEINFO>();
                 Write(verInfoSize, (uint)versionSize);
                 if (bufferSize < versionSize)
                 {
@@ -590,14 +605,6 @@ namespace SOS.Hosting {
                 return HResult.E_INVALIDARG;
             }
             return HResult.S_OK;
-        }
-
-        internal static int SetThreadContext(
-            IntPtr self,
-            IntPtr context,
-            int contextSize)
-        {
-            return DebugClient.NotImplemented;
         }
 
         internal int GetNumberThreads(
@@ -861,7 +868,7 @@ namespace SOS.Hosting {
             {
                 return default;
             }
-            return (T)Marshal.GetDelegateForFunctionPointer(functionAddress, typeof(T));
+            return Marshal.GetDelegateForFunctionPointer<T>(functionAddress);
         }
 
         private string GetFileName(string fileName) => Target.OperatingSystem == OSPlatform.Windows ? Path.GetFileNameWithoutExtension(fileName) : Path.GetFileName(fileName);
@@ -880,39 +887,6 @@ namespace SOS.Hosting {
             {
                 *pointer = value;
             }
-        }
-    }
-
-    public static class ComWrapper
-    {
-        /// <summary>
-        /// Asserts the the reference count doesn't go below 0.
-        /// </summary>
-        /// <param name="comCallable">wrapper instance</param>
-        public static void ReleaseWithCheck(this COMCallableIUnknown comCallable)
-        {
-            int count = comCallable.Release();
-            Debug.Assert(count >= 0);
-        }
-
-        /// <summary>
-        /// Asserts the the reference count doesn't go below 0.
-        /// </summary>
-        /// <param name="callableCOM">wrapper instance</param>
-        public static void ReleaseWithCheck(this CallableCOMWrapper callableCOM)
-        {
-            int count = callableCOM.Release();
-            Debug.Assert(count >= 0);
-        }
-
-        /// <summary>
-        /// Asserts the the reference count doesn't go below 0.
-        /// </summary>
-        /// <param name="callableCOM">wrapper instance</param>
-        public static void ReleaseWithCheck(IntPtr punk)
-        {
-            int count = COMHelper.Release(punk);
-            Debug.Assert(count >= 0);
         }
     }
 }

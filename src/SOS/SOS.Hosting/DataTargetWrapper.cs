@@ -5,22 +5,19 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.Runtime;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop;
 
-namespace SOS.Hosting {
-    internal sealed unsafe class DataTargetWrapper : COMCallableIUnknown
+namespace SOS.Hosting
+{
+    [GeneratedComClass]
+    internal sealed unsafe partial class DataTargetWrapper : ICLRDataTarget2Generated, ICorDebugDataTarget4Generated,
+        ICLRMetadataLocatorGenerated, ICLRRuntimeLocatorGenerated, ICLRContractLocatorGenerated, ICLRSymbolProviderGenerated, IDisposable
     {
-        private static readonly Guid IID_ICLRDataTarget = new("3E11CCEE-D08B-43e5-AF01-32717A64DA03");
-        private static readonly Guid IID_ICLRDataTarget2 = new("6d05fae3-189c-4630-a6dc-1c251e1c01ab");
-        private static readonly Guid IID_ICLRDataTarget4 = new("E799DC06-E099-4713-BDD9-906D3CC02CF2");
-        private static readonly Guid IID_ICLRMetadataLocator = new("aa8fa804-bc05-4642-b2c5-c353ed22fc63");
-        private static readonly Guid IID_ICLRRuntimeLocator = new("b760bf44-9377-4597-8be7-58083bdc5146");
-        private static readonly Guid IID_ICLRContractLocator = new("17d5b8c6-34a9-407f-af4f-a930201d4e02");
-        private static readonly Guid IID_ICLRSymbolProvider = new("c4f8b7e2-9d3a-4f6c-b1e5-8a2d7c3f9b1e");
-
         // For ClrMD's magic hand shake
         private const ulong MagicCallbackConstant = 0x43;
 
@@ -35,7 +32,7 @@ namespace SOS.Hosting {
         private readonly IClrSymbolProvider _symbolProvider;
         private readonly ulong _ignoreAddressBitsMask;
 
-        public IntPtr IDataTarget { get; }
+        public IntPtr IDataTarget { get; private set; }
 
         public DataTargetWrapper(IServiceProvider services, IRuntime runtime)
         {
@@ -52,70 +49,23 @@ namespace SOS.Hosting {
             _symbolProvider = services.GetService<IClrSymbolProvider>();
             _ignoreAddressBitsMask = _memoryService.SignExtensionMask();
 
-            VTableBuilder builder = AddInterface(IID_ICLRDataTarget, false);
-            AddDataTarget(builder);
-            IDataTarget = builder.Complete();
-
-            builder = AddInterface(IID_ICLRDataTarget2, false);
-            AddDataTarget2(builder);
-            builder.Complete();
-
-            builder = AddInterface(IID_ICLRDataTarget4, validate: false);
-            builder.AddMethod(new VirtualUnwindDelegate(VirtualUnwind));
-            builder.Complete();
-
-            builder = AddInterface(IID_ICLRMetadataLocator, false);
-            builder.AddMethod(new GetMetadataDelegate(GetMetadata));
-            builder.Complete();
-
-            builder = AddInterface(IID_ICLRRuntimeLocator, false);
-            builder.AddMethod(new GetRuntimeBaseDelegate(GetRuntimeBase));
-            builder.Complete();
-
-            builder = AddInterface(IID_ICLRContractLocator, false);
-            builder.AddMethod(new GetContractDescriptorDelegate(GetContractDescriptor));
-            builder.Complete();
-
-            builder = AddInterface(IID_ICLRSymbolProvider, false);
-            builder.AddMethod(new TryGetSymbolNameDelegate(TryGetSymbolName));
-            builder.AddMethod(new TryGetSymbolAddressDelegate(TryGetSymbolAddress));
-            builder.AddMethod(new TryGetFieldOffsetDelegate(TryGetFieldOffset));
-            builder.Complete();
-
-            AddRef();
+            IDataTarget = (IntPtr)ComInterfaceMarshaller<ICLRDataTargetGenerated>.ConvertToUnmanaged(this);
         }
 
-        private void AddDataTarget(VTableBuilder builder)
+        public void Dispose()
         {
-            builder.AddMethod(new GetMachineTypeDelegate(GetMachineType));
-            builder.AddMethod(new GetPointerSizeDelegate(GetPointerSize));
-            builder.AddMethod(new GetImageBaseDelegate(GetImageBase));
-            builder.AddMethod(new ReadVirtualDelegate(ReadVirtual));
-            builder.AddMethod(new WriteVirtualDelegate(WriteVirtual));
-            builder.AddMethod(new GetTLSValueDelegate(GetTLSValue));
-            builder.AddMethod(new SetTLSValueDelegate(SetTLSValue));
-            builder.AddMethod(new GetCurrentThreadIDDelegate(GetCurrentThreadID));
-            builder.AddMethod(new GetThreadContextDelegate(GetThreadContext));
-            builder.AddMethod(new SetThreadContextDelegate(SetThreadContext));
-            builder.AddMethod(new RequestDelegate(Request));
-        }
-
-        private void AddDataTarget2(VTableBuilder builder)
-        {
-            AddDataTarget(builder);
-            builder.AddMethod(new AllocVirtualDelegate(AllocVirtual));
-            builder.AddMethod(new FreeVirtualDelegate(FreeVirtual));
-        }
-
-        protected override void Destroy()
-        {
-            Trace.TraceInformation("DataTargetWrapper.Destroy");
+            if (IDataTarget == IntPtr.Zero)
+            {
+                return;
+            }
+            Trace.TraceInformation("DataTargetWrapper.Dispose");
+            ComInterfaceMarshaller<ICLRDataTargetGenerated>.Free((void*)IDataTarget);
+            IDataTarget = IntPtr.Zero;
         }
 
         #region ICLRDataTarget
 
-        private int GetMachineType(
-            IntPtr self,
+        int ICLRDataTargetGenerated.GetMachineType(
             out IMAGE_FILE_MACHINE machineType)
         {
             ITarget target = _runtime.Target;
@@ -133,16 +83,14 @@ namespace SOS.Hosting {
             return HResult.S_OK;
         }
 
-        private int GetPointerSize(
-            IntPtr self,
-            out int pointerSize)
+        int ICLRDataTargetGenerated.GetPointerSize(
+            out uint pointerSize)
         {
-            pointerSize = _memoryService.PointerSize;
+            pointerSize = (uint)_memoryService.PointerSize;
             return HResult.S_OK;
         }
 
-        private int GetImageBase(
-            IntPtr self,
+        int ICLRDataTargetGenerated.GetImageBase(
             string imagePath,
             out ulong baseAddress)
         {
@@ -156,10 +104,9 @@ namespace SOS.Hosting {
             return HResult.E_FAIL;
         }
 
-        private int ReadVirtual(
-            IntPtr self,
+        int ICLRDataTargetGenerated.ReadVirtual(
             ulong address,
-            IntPtr buffer,
+            byte* buffer,
             uint bytesRequested,
             uint* pbytesRead)
         {
@@ -168,7 +115,7 @@ namespace SOS.Hosting {
             if (bytesRequested > 0)
             {
                 address &= _ignoreAddressBitsMask;
-                if (!_memoryService.ReadMemory(address, buffer, unchecked((int)bytesRequested), out read))
+                if (!_memoryService.ReadMemory(address, new Span<byte>(buffer, unchecked((int)bytesRequested)), out read))
                 {
                     Trace.TraceError("DataTargetWrapper.ReadVirtual FAILED address {0:X16} size {1:X8}", address, bytesRequested);
                     SOSHost.Write(pbytesRead);
@@ -179,15 +126,14 @@ namespace SOS.Hosting {
             return HResult.S_OK;
         }
 
-        private int WriteVirtual(
-            IntPtr self,
+        int ICLRDataTargetGenerated.WriteVirtual(
             ulong address,
-            IntPtr buffer,
+            byte* buffer,
             uint bytesRequested,
             uint* bytesWritten)
         {
             address &= _ignoreAddressBitsMask;
-            if (!_memoryService.WriteMemory(address, new Span<byte>(buffer.ToPointer(), unchecked((int)bytesRequested)), out int written))
+            if (!_memoryService.WriteMemory(address, new Span<byte>(buffer, unchecked((int)bytesRequested)), out int written))
             {
                 SOSHost.Write(bytesWritten);
                 return HResult.E_FAIL;
@@ -196,8 +142,7 @@ namespace SOS.Hosting {
             return HResult.S_OK;
         }
 
-        private int GetTLSValue(
-            IntPtr self,
+        int ICLRDataTargetGenerated.GetTLSValue(
             uint threadId,
             uint index,
             ulong* value)
@@ -205,8 +150,7 @@ namespace SOS.Hosting {
             return HResult.E_NOTIMPL;
         }
 
-        private int SetTLSValue(
-            IntPtr self,
+        int ICLRDataTargetGenerated.SetTLSValue(
             uint threadId,
             uint index,
             ulong value)
@@ -214,8 +158,7 @@ namespace SOS.Hosting {
             return HResult.E_NOTIMPL;
         }
 
-        private int GetCurrentThreadID(
-            IntPtr self,
+        int ICLRDataTargetGenerated.GetCurrentThreadID(
             out uint threadId)
         {
             uint? id = _contextService.GetCurrentThread()?.ThreadId;
@@ -228,16 +171,20 @@ namespace SOS.Hosting {
             return HResult.E_FAIL;
         }
 
-        private int GetThreadContext(
-            IntPtr self,
+        int ICLRDataTargetGenerated.GetThreadContext(
             uint threadId,
             uint contextFlags,
-            int contextSize,
-            IntPtr context)
+            uint contextSize,
+            byte* context)
         {
+            if (contextSize > int.MaxValue)
+            {
+                Trace.TraceError($"DataTargetWrapper.GetThreadContext: invalid context size {contextSize}");
+                return HResult.E_INVALIDARG;
+            }
             try
             {
-                _threadService.GetThreadFromId(threadId).GetThreadContext(context, contextSize);
+                _threadService.GetThreadFromId(threadId).GetThreadContext(new Span<byte>(context, (int)contextSize));
             }
             catch (Exception ex) when (ex is DiagnosticsException or ArgumentOutOfRangeException)
             {
@@ -247,22 +194,20 @@ namespace SOS.Hosting {
             return HResult.S_OK;
         }
 
-        private int SetThreadContext(
-            IntPtr self,
+        int ICLRDataTargetGenerated.SetThreadContext(
             uint threadId,
-            int contextSize,
-            IntPtr context)
+            uint contextSize,
+            byte* context)
         {
             return HResult.E_NOTIMPL;
         }
 
-        private int Request(
-            IntPtr self,
+        int ICLRDataTargetGenerated.Request(
             uint reqCode,
             uint inBufferSize,
-            IntPtr inBuffer,
-            IntPtr outBufferSize,
-            IntPtr* outBuffer)
+            byte* inBuffer,
+            uint outBufferSize,
+            byte* outBuffer)
         {
             return HResult.E_NOTIMPL;
         }
@@ -271,8 +216,7 @@ namespace SOS.Hosting {
 
         #region ICLRDataTarget2
 
-        private int AllocVirtual(
-            IntPtr self,
+        int ICLRDataTarget2Generated.AllocVirtual(
             ulong address,
             uint size,
             uint typeFlags,
@@ -291,8 +235,7 @@ namespace SOS.Hosting {
             return HResult.S_OK;
         }
 
-        private int FreeVirtual(
-            IntPtr self,
+        int ICLRDataTarget2Generated.FreeVirtual(
             ulong address,
             uint size,
             uint typeFlags)
@@ -310,21 +253,25 @@ namespace SOS.Hosting {
 
         #endregion
 
-        #region ICLRDataTarget4
+        #region ICorDebugDataTarget4
 
-        private int VirtualUnwind(
-            IntPtr self,
+        int ICorDebugDataTarget4Generated.VirtualUnwind(
             uint threadId,
-            int contextSize,
-            byte[] context)
+            uint contextSize,
+            byte* context)
         {
+            if (contextSize > int.MaxValue)
+            {
+                Trace.TraceError($"DataTargetWrapper.VirtualUnwind: invalid context size {contextSize}");
+                return HResult.E_INVALIDARG;
+            }
             try
             {
                 if (_threadUnwindService == null)
                 {
                     return HResult.E_NOTIMPL;
                 }
-                return _threadUnwindService.Unwind(threadId, context.AsSpan(0, contextSize));
+                return _threadUnwindService.Unwind(threadId, new Span<byte>(context, (int)contextSize));
             }
             catch (DiagnosticsException)
             {
@@ -336,27 +283,26 @@ namespace SOS.Hosting {
 
         #region ICLRMetadataLocator
 
-        private int GetMetadata(
-            IntPtr self,
+        int ICLRMetadataLocatorGenerated.GetMetadata(
             string fileName,
             uint imageTimestamp,
             uint imageSize,
-            byte[] mvid,
+            Guid* mvid,
             uint mdRva,
             uint flags,
             uint bufferSize,
-            IntPtr buffer,
-            IntPtr dataSize)
+            byte* buffer,
+            uint* dataSize)
         {
-            return _symbolService.GetMetadataLocator(fileName, imageTimestamp, imageSize, mvid, mdRva, flags, bufferSize, buffer, dataSize);
+            byte[] mvidBytes = mvid == null ? null : new ReadOnlySpan<byte>(mvid, sizeof(Guid)).ToArray();
+            return _symbolService.GetMetadataLocator(fileName, imageTimestamp, imageSize, mvidBytes, mdRva, flags, bufferSize, (IntPtr)buffer, (IntPtr)dataSize);
         }
 
         #endregion
 
         #region ICLRRuntimeLocator
 
-        private int GetRuntimeBase(
-            IntPtr self,
+        int ICLRRuntimeLocatorGenerated.GetRuntimeBase(
             out ulong address)
         {
             address = _runtime.RuntimeModule.ImageBase;
@@ -367,8 +313,7 @@ namespace SOS.Hosting {
 
         #region ICLRContractLocator
 
-        private int GetContractDescriptor(
-            IntPtr self,
+        int ICLRContractLocatorGenerated.GetContractDescriptor(
             out ulong address)
         {
             address = 0;
@@ -389,8 +334,7 @@ namespace SOS.Hosting {
 
         #region ICLRSymbolProvider
 
-        private int TryGetSymbolName(
-            IntPtr self,
+        int ICLRSymbolProviderGenerated.TryGetSymbolName(
             ulong address,
             uint cchName,
             char* pName,
@@ -445,8 +389,7 @@ namespace SOS.Hosting {
             }
         }
 
-        private int TryGetSymbolAddress(
-            IntPtr self,
+        int ICLRSymbolProviderGenerated.TryGetSymbolAddress(
             ulong moduleBase,
             string name,
             ulong* pAddress)
@@ -492,8 +435,7 @@ namespace SOS.Hosting {
             }
         }
 
-        private int TryGetFieldOffset(
-            IntPtr self,
+        int ICLRSymbolProviderGenerated.TryGetFieldOffset(
             ulong moduleBase,
             string typeName,
             string fieldName,
@@ -531,179 +473,6 @@ namespace SOS.Hosting {
                 return HResult.E_FAIL;
             }
         }
-
-        #endregion
-
-        #region ICLRDataTarget delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetMachineTypeDelegate(
-            [In] IntPtr self,
-            [Out] out IMAGE_FILE_MACHINE machineType);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetPointerSizeDelegate(
-            [In] IntPtr self,
-            [Out] out int pointerSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetImageBaseDelegate(
-            [In] IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string imagePath,
-            [Out] out ulong baseAddress);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int ReadVirtualDelegate(
-            [In] IntPtr self,
-            [In] ulong address,
-            [In] IntPtr buffer,
-            [In] uint bytesRequested,
-            [Out] uint* bytesRead);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int WriteVirtualDelegate(
-            [In] IntPtr self,
-            [In] ulong address,
-            [In] IntPtr buffer,
-            [In] uint bytesRequested,
-            [Out] uint* bytesWritten);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetTLSValueDelegate(
-            [In] IntPtr self,
-            [In] uint threadId,
-            [In] uint index,
-            [Out] ulong* value);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetTLSValueDelegate(
-            [In] IntPtr self,
-            [In] uint threadId,
-            [In] uint index,
-            [In] ulong value);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetCurrentThreadIDDelegate(
-            [In] IntPtr self,
-            [Out] out uint threadId);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetThreadContextDelegate(
-            [In] IntPtr self,
-            [In] uint threadId,
-            [In] uint contextFlags,
-            [In] int contextSize,
-            [Out] IntPtr context);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetThreadContextDelegate(
-            [In] IntPtr self,
-            [In] uint threadId,
-            [In] int contextSize,
-            [In] IntPtr context);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int RequestDelegate(
-            [In] IntPtr self,
-            [In] uint reqCode,
-            [In] uint inBufferSize,
-            [In] IntPtr inBuffer,
-            [In] IntPtr outBufferSize,
-            [Out] IntPtr* outBuffer);
-
-        #endregion
-
-        #region ICLRDataTarget2 delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AllocVirtualDelegate(
-            [In] IntPtr self,
-            [In] ulong address,
-            [In] uint size,
-            [In] uint typeFlags,
-            [In] uint protectFlags,
-            [Out] ulong* buffer);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int FreeVirtualDelegate(
-            [In] IntPtr self,
-            [In] ulong address,
-            [In] uint size,
-            [In] uint typeFlags);
-
-        #endregion
-
-        #region ICLRDataTarget4 delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int VirtualUnwindDelegate(
-            [In] IntPtr self,
-            [In] uint threadId,
-            [In] int contextSize,
-            [In, Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 2)] byte[] context);
-
-        #endregion
-
-        #region ICLRMetadataLocator delegate
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetMetadataDelegate(
-            [In] IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string fileName,
-            [In] uint imageTimestamp,
-            [In] uint imageSize,
-            [In][MarshalAs(UnmanagedType.LPArray, SizeConst = 16)] byte[] mvid,
-            [In] uint mdRva,
-            [In] uint flags,
-            [In] uint bufferSize,
-            [In] IntPtr buffer,
-            [In] IntPtr dataSize);
-
-        #endregion
-
-        #region ICLRRuntimeLocator delegate
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetRuntimeBaseDelegate(
-            [In] IntPtr self,
-            [Out] out ulong address);
-
-        #endregion
-
-        #region ICLRContractLocator delegate
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetContractDescriptorDelegate(
-            [In] IntPtr self,
-            [Out] out ulong address);
-
-        #endregion
-
-        #region ICLRSymbolProvider delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int TryGetSymbolNameDelegate(
-            [In] IntPtr self,
-            [In] ulong address,
-            [In] uint cchName,
-            [Out] char* pName,
-            [Out] uint* pcchNameActual,
-            [Out] ulong* pDisplacement);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int TryGetSymbolAddressDelegate(
-            [In] IntPtr self,
-            [In] ulong moduleBase,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string name,
-            [Out] ulong* pAddress);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int TryGetFieldOffsetDelegate(
-            [In] IntPtr self,
-            [In] ulong moduleBase,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string typeName,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string fieldName,
-            [Out] uint* pOffset);
 
         #endregion
     }

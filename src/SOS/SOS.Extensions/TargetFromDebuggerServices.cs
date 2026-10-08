@@ -10,6 +10,7 @@ using Microsoft.Diagnostics.Runtime.Utilities;
 using SOS.Extensions.Clrma;
 using SOS.Hosting;
 using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop;
 using Architecture = System.Runtime.InteropServices.Architecture;
 
 namespace SOS.Extensions
@@ -27,13 +28,13 @@ namespace SOS.Extensions
         {
             Debug.Assert(debuggerServices != null);
 
-            HResult hr = debuggerServices.GetOperatingSystem(out DebuggerServices.OperatingSystem operatingSystem);
+            HResult hr = debuggerServices.GetOperatingSystem(out IDebuggerServicesGenerated.OperatingSystem operatingSystem);
             Debug.Assert(hr == HResult.S_OK);
             OperatingSystem = operatingSystem switch
             {
-                DebuggerServices.OperatingSystem.Windows => OSPlatform.Windows,
-                DebuggerServices.OperatingSystem.Linux => OSPlatform.Linux,
-                DebuggerServices.OperatingSystem.OSX => OSPlatform.OSX,
+                IDebuggerServicesGenerated.OperatingSystem.Windows => OSPlatform.Windows,
+                IDebuggerServicesGenerated.OperatingSystem.Linux => OSPlatform.Linux,
+                IDebuggerServicesGenerated.OperatingSystem.OSX => OSPlatform.OSX,
                 _ => throw new PlatformNotSupportedException($"Operating system not supported: {operatingSystem}"),
             };
 
@@ -115,7 +116,10 @@ namespace SOS.Extensions
             Finished();
 
             TargetWrapper targetWrapper = Services.GetService<TargetWrapper>();
-            targetWrapper?.ServiceWrapper.AddServiceWrapper(ClrmaServiceWrapper.IID_ICLRMAService, () => new ClrmaServiceWrapper(this, Services, targetWrapper.ServiceWrapper));
+            if (targetWrapper != null)
+            {
+                targetWrapper.ClrmaServiceFactory = () => new ClrmaServiceWrapper(Services);
+            }
         }
 
         private unsafe ICrashInfoService CreateCrashInfoServiceFromException(IServiceProvider services, DebuggerServices debuggerServices)

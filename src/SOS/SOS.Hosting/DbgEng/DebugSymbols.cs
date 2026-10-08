@@ -2,1136 +2,266 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
-using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using SOS.Hosting.DbgEng.Interop;
+using SOS.Hosting.Interop.DbgEng;
 
 namespace SOS.Hosting.DbgEng
 {
-    internal sealed unsafe class DebugSymbols
+    internal sealed unsafe partial class DebugClient
     {
-        internal DebugSymbols(DebugClient client, SOSHost soshost)
+        int IDebugSymbolsGenerated.GetSymbolOptions(out SYMOPT options)
         {
-            VTableBuilder builder = client.AddInterface(typeof(IDebugSymbols).GUID, validate: true);
-            AddDebugSymbols(builder, soshost);
-            builder.Complete();
-
-            builder = client.AddInterface(typeof(IDebugSymbols2).GUID, validate: true);
-            AddDebugSymbols2(builder, soshost);
-            builder.Complete();
-
-            builder = client.AddInterface(typeof(IDebugSymbols3).GUID, validate: true);
-            AddDebugSymbols3(builder, soshost);
-            builder.Complete();
+            return SOSHost.GetSymbolOptions(IntPtr.Zero, out options);
         }
 
-        private static void AddDebugSymbols(VTableBuilder builder, SOSHost soshost)
+        int IDebugSymbolsGenerated.AddSymbolOptions(SYMOPT options)
         {
-            builder.AddMethod(new GetSymbolOptionsDelegate(SOSHost.GetSymbolOptions));
-            builder.AddMethod(new AddSymbolOptionsDelegate((self, options) => HResult.S_OK));
-            builder.AddMethod(new RemoveSymbolOptionsDelegate((self, options) => HResult.S_OK));
-            builder.AddMethod(new SetSymbolOptionsDelegate((self, options) => HResult.S_OK));
-            builder.AddMethod(new GetNameByOffsetDelegate(SOSHost.GetNameByOffset));
-            builder.AddMethod(new GetOffsetByNameDelegate((self, symbol, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetNearNameByOffsetDelegate((self, offset, delta, nameBuffer, nameBufferSize, nameSize, displacement) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetLineByOffsetDelegate(SOSHost.GetLineByOffset));
-            builder.AddMethod(new GetOffsetByLineDelegate((self, line, file, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetNumberModulesDelegate(soshost.GetNumberModules));
-            builder.AddMethod(new GetModuleByIndexDelegate(soshost.GetModuleByIndex));
-            builder.AddMethod(new GetModuleByModuleNameDelegate(soshost.GetModuleByModuleName));
-            builder.AddMethod(new GetModuleByOffsetDelegate(soshost.GetModuleByOffset));
-            builder.AddMethod(new GetModuleNamesDelegate(soshost.GetModuleNames));
-            builder.AddMethod(new GetModuleParametersDelegate(soshost.GetModuleParameters));
-            builder.AddMethod(new GetSymbolModuleDelegate((self, symbol, baseAddress) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetTypeNameDelegate((self, module, typeId, nameBuffer, nameBufferSize, nameSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetTypeIdDelegate((self, module, name, typeId) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetTypeSizeDelegate((self, module, typeId, size) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetFieldOffsetDelegate((self, module, typeId, field, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolTypeIdDelegate((self, symbol, typeId, module) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetOffsetTypeIdDelegate((self, offset, typeId, module) => DebugClient.NotImplemented));
-            builder.AddMethod(new ReadTypedDataVirtualDelegate((self, offset, module, typeid, buffer, buffersize, bytesRead) => DebugClient.NotImplemented));
-            builder.AddMethod(new WriteTypedDataVirtualDelegate((self, offset, module, typeid, buffer, buffersize, bytesWritten) => DebugClient.NotImplemented));
-            builder.AddMethod(new OutputTypedDataVirtualDelegate((self, outputControl, offset, module, typeId, flags) => DebugClient.NotImplemented));
-            builder.AddMethod(new ReadTypedDataPhysicalDelegate((self, offset, module, typeid, buffer, buffersize, bytesRead) => DebugClient.NotImplemented));
-            builder.AddMethod(new WriteTypedDataPhysicalDelegate((self, offset, module, typeid, buffer, buffersize, bytesWritten) => DebugClient.NotImplemented));
-            builder.AddMethod(new OutputTypedDataPhysicalDelegate((self, outputControl, offset, module, typeId, flags) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetScopeDelegate((self, instructionOffset, scopeFrame, scopeContext, scopeContextSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetScopeDelegate((IntPtr self, ulong instructionOffset, ref DEBUG_STACK_FRAME scopeFrame, IntPtr scopeContext, uint scopeContextSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new ResetScopeDelegate((self) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetScopeSymbolGroupDelegate((self, flags, update, symbols) => DebugClient.NotImplemented));
-            builder.AddMethod(new CreateSymbolGroupDelegate((self, group) => DebugClient.NotImplemented));
-            builder.AddMethod(new StartSymbolMatchDelegate((self, pattern, handle) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetNextSymbolMatchDelegate((self, handle, buffer, bufferSize, matchSize, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new EndSymbolMatchDelegate((self, handle) => DebugClient.NotImplemented));
-            builder.AddMethod(new ReloadDelegate((self, module) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolPathDelegate(SOSHost.GetSymbolPath));
-            builder.AddMethod(new SetSymbolPathDelegate((self, path) => DebugClient.NotImplemented));
-            builder.AddMethod(new AppendSymbolPathDelegate((self, addition) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetImagePathDelegate((self, buffer, bufferSize, pathSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetImagePathDelegate((self, path) => DebugClient.NotImplemented));
-            builder.AddMethod(new AppendImagePathDelegate((self, path) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourcePathDelegate((self, buffer, bufferSize, pathSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourcePathElementDelegate((self, index, buffer, bufferSize, elementSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetSourcePathDelegate((self, path) => DebugClient.NotImplemented));
-            builder.AddMethod(new AppendSourcePathDelegate((self, addition) => DebugClient.NotImplemented));
-            builder.AddMethod(new FindSourceFileDelegate(SOSHost.FindSourceFile));
-            builder.AddMethod(new GetSourceFileLineOffsetsDelegate((self, file, buffer, bufferLines, fileLines) => DebugClient.NotImplemented));
+            return HResult.S_OK;
         }
 
-        private static void AddDebugSymbols2(VTableBuilder builder, SOSHost soshost)
+        int IDebugSymbolsGenerated.RemoveSymbolOptions(SYMOPT options)
         {
-            AddDebugSymbols(builder, soshost);
-            builder.AddMethod(new GetModuleVersionInformationDelegate(soshost.GetModuleVersionInformation));
-            builder.AddMethod(new GetModuleNameStringDelegate((self, which, index, baseAddress, buffer, bufferSize, nameSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetConstantNameDelegate((self, module, typeId, value, buffer, bufferSize, nameSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetFieldNameDelegate((self, module, typeId, fieldIndex, buffer, bufferSize, nameSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetTypeOptionsDelegate((self, options) => DebugClient.NotImplemented));
-            builder.AddMethod(new AddTypeOptionsDelegate((self, options) => DebugClient.NotImplemented));
-            builder.AddMethod(new RemoveTypeOptionsDelegate((self, options) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetTypeOptionsDelegate((self, options) => DebugClient.NotImplemented));
+            return HResult.S_OK;
         }
 
-        private static void AddDebugSymbols3(VTableBuilder builder, SOSHost soshost)
+        int IDebugSymbolsGenerated.SetSymbolOptions(SYMOPT options)
         {
-            AddDebugSymbols2(builder, soshost);
-            builder.AddMethod(new GetNameByOffsetWideDelegate(SOSHost.GetNameByOffset));
-            builder.AddMethod(new GetOffsetByNameWideDelegate((self, symbol, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetNearNameByOffsetWideDelegate((self, offset, delta, nameBuffer, nameBufferSize, nameSize, displacement) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetLineByOffsetWideDelegate((self, offset, line, fileBuffer, fileBufferSize, fileSize, displacement) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetOffsetByLineWideDelegate((self, line, file, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetModuleByModuleNameWideDelegate(soshost.GetModuleByModuleName));
-            builder.AddMethod(new GetSymbolModuleWideDelegate((self, symbol, baseAddress) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetTypeNameWideDelegate((self, module, typeId, nameBuffer, nameBufferSize, nameSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetTypeIdWideDelegate((self, module, name, typeId) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetFieldOffsetWideDelegate((self, module, typeId, field, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolTypeIdWideDelegate((self, symbol, typeId, module) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetScopeSymbolGroup2Delegate((self, flags, update, symbols) => DebugClient.NotImplemented));
-            builder.AddMethod(new CreateSymbolGroup2Delegate((self, group) => DebugClient.NotImplemented));
-            builder.AddMethod(new StartSymbolMatchWideDelegate((self, pattern, handle) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetNextSymbolMatchWideDelegate((self, handle, buffer, buffesSize, matchSize, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new ReloadWideDelegate((self, module) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolPathWideDelegate(SOSHost.GetSymbolPath));
-            builder.AddMethod(new SetSymbolPathWideDelegate((self, path) => DebugClient.NotImplemented));
-            builder.AddMethod(new AppendSymbolPathWideDelegate((self, addition) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetImagePathWideDelegate((self, buffer, bufferSize, pathSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetImagePathWideDelegate((self, path) => DebugClient.NotImplemented));
-            builder.AddMethod(new AppendImagePathWideDelegate((self, path) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourcePathWideDelegate((self, buffer, bufferSize, pathSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourcePathElementWideDelegate((self, index, buffer, bufferSize, elementSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetSourcePathWideDelegate((self, path) => DebugClient.NotImplemented));
-            builder.AddMethod(new AppendSourcePathWideDelegate((self, addition) => DebugClient.NotImplemented));
-            builder.AddMethod(new FindSourceFileWideDelegate(SOSHost.FindSourceFile));
-            builder.AddMethod(new GetSourceFileLineOffsetsWideDelegate((self, file, buffer, bufferLines, fileLines) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetModuleVersionInformationWideDelegate((self, index, baseAddress, item, buffer, bufferSize, verInfoSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetModuleNameStringWideDelegate((self, which, index, baseAddress, buffer, bufferSize, nameSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetConstantNameWideDelegate((self, module, typeId, value, buffer, bufferSize, nameSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetFieldNameWideDelegate((self, module, typeId, fieldIndex, buffer, bufferSize, nameSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new IsManagedModuleDelegate((self, index, baseAddress) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetModuleByModuleName2Delegate((self, name, startIndex, flags, index, baseAddress) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetModuleByModuleName2WideDelegate((self, name, startIndex, flags, index, baseAddress) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetModuleByOffset2Delegate((self, offset, startIndex, flags, index, baseAddress) => DebugClient.NotImplemented));
-            builder.AddMethod(new AddSyntheticModuleDelegate((self, baseAddress, size, imagePath, moduleName, flags) => DebugClient.NotImplemented));
-            builder.AddMethod(new AddSyntheticModuleWideDelegate((self, baseAddress, size, imagePath, moduleName, flags) => DebugClient.NotImplemented));
-            builder.AddMethod(new RemoveSyntheticModuleDelegate((self, baseAddress) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetCurrentScopeFrameIndexDelegate((self, index) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetScopeFrameByIndexDelegate((self, index) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetScopeFromJitDebugInfoDelegate((self, outputControl, infoOffset) => DebugClient.NotImplemented));
-            builder.AddMethod(new SetScopeFromStoredEventDelegate((self) => DebugClient.NotImplemented));
-            builder.AddMethod(new OutputSymbolByOffsetDelegate((self, outputControl, flags, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetFunctionEntryByOffsetDelegate((self, offset, flags, buffer, buffersize, bufferNeeded) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetFieldTypeAndOffsetDelegate((self, module, containerTypeId, field, fieldTypeId, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetFieldTypeAndOffsetWideDelegate((self, module, containerTypeId, field, fieldTypeId, offset) => DebugClient.NotImplemented));
-            builder.AddMethod(new AddSyntheticSymbolDelegate((self, offset, size, name, flags, id) => DebugClient.NotImplemented));
-            builder.AddMethod(new AddSyntheticSymbolWideDelegate((self, offset, size, name, flags, id) => DebugClient.NotImplemented));
-            builder.AddMethod(new RemoveSyntheticSymbolDelegate((self, id) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntriesByOffsetDelegate((self, offset, flags, ids, displacement, idsCount, entries) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntriesByNameDelegate((self, symbol, flags, ids, idsCount, entries) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntriesByNameWideDelegate((self, symbol, flags, ids, idsCount, entries) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntryByTokenDelegate((self, moduleBase, token, id) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntryInformationDelegate((self, id, info) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntryStringDelegate((self, id, which, buffer, bufferSize, stringSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntryStringWideDelegate((self, id, which, buffer, bufferSize, stringSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntryOffsetRegionsDelegate((self, id, flags, regions, regionsCount, regionsAvail) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSymbolEntryBySymbolEntryDelegate((self, fromId, flags, toId) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourceEntriesByOffsetDelegate((self, offset, flags, entries, entriesCount, entriesAvail) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourceEntriesByLineDelegate((self, line, file, flags, entries, entriesCount, entriesAvail) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourceEntriesByLineWideDelegate((self, line, file, flags, entries, entriesCount, entriesAvail) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourceEntryStringDelegate((self, entry, which, buffer, bufferSize, stringSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourceEntryStringWideDelegate((self, entry, which, buffer, bufferSize, stringSize) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourceEntryOffsetRegionsDelegate((self, entry, flags, regions, regionsCount, regionsAvail) => DebugClient.NotImplemented));
-            builder.AddMethod(new GetSourceEntryBySourceEntryDelegate((self, fromEntry, flags, toEntry) => DebugClient.NotImplemented));
+            return HResult.S_OK;
         }
 
-        #region IDebugSymbols Delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolOptionsDelegate(
-            IntPtr self,
-            [Out] out SYMOPT Options);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AddSymbolOptionsDelegate(
-            IntPtr self,
-            [In] SYMOPT Options);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int RemoveSymbolOptionsDelegate(
-            IntPtr self,
-            [In] SYMOPT Options);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetSymbolOptionsDelegate(
-            IntPtr self,
-            [In] SYMOPT Options);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private unsafe delegate int GetNameByOffsetDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder NameBuffer,
-            [In] uint NameBufferSize,
-            [Out] uint* NameSize,
-            [Out] ulong* Displacement);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetOffsetByNameDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Symbol,
-            [Out] ulong* Offset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetNearNameByOffsetDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] int Delta,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder NameBuffer,
-            [In] int NameBufferSize,
-            [Out] uint* NameSize,
-            [Out] ulong* Displacement);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetLineByOffsetDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [Out] uint* Line,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder FileBuffer,
-            [In] uint FileBufferSize,
-            [Out] uint* FileSize,
-            [Out] ulong* Displacement);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetOffsetByLineDelegate(
-            IntPtr self,
-            [In] uint Line,
-            [In][MarshalAs(UnmanagedType.LPStr)] string File,
-            [Out] ulong* Offset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetNumberModulesDelegate(
-            IntPtr self,
-            [Out] out uint Loaded,
-            [Out] out uint Unloaded);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleByIndexDelegate(
-            IntPtr self,
-            [In] uint Index,
-            [Out] out ulong Base);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleByModuleNameDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Name,
-            [In] uint StartIndex,
-            [Out] uint* Index,
-            [Out] ulong* Base);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleByOffsetDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] uint StartIndex,
-            [Out] uint* Index,
-            [Out] ulong* Base);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleNamesDelegate(
-            IntPtr self,
-            [In] uint Index,
-            [In] ulong Base,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder ImageNameBuffer,
-            [In] uint ImageNameBufferSize,
-            [Out] uint* ImageNameSize,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder ModuleNameBuffer,
-            [In] uint ModuleNameBufferSize,
-            [Out] uint* ModuleNameSize,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder LoadedImageNameBuffer,
-            [In] uint LoadedImageNameBufferSize,
-            [Out] uint* LoadedImageNameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleParametersDelegate(
-            IntPtr self,
-            [In] uint Count,
-            [In] ulong* Bases,
-            [In] uint Start,
-            [Out] DEBUG_MODULE_PARAMETERS* Params);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolModuleDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Symbol,
-            [Out] ulong* Base);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetTypeNameDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder NameBuffer,
-            [In] int NameBufferSize,
-            [Out] uint* NameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetTypeIdDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Name,
-            [Out] uint* TypeId);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetTypeSizeDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [Out] uint* Size);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetFieldOffsetDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Field,
-            [Out] uint* Offset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolTypeIdDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Symbol,
-            [Out] uint* TypeId,
-            [Out] ulong* Module);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetOffsetTypeIdDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [Out] uint* TypeId,
-            [Out] ulong* Module);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int ReadTypedDataVirtualDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [Out] byte* Buffer,
-            [In] uint BufferSize,
-            [Out] uint* BytesRead);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int WriteTypedDataVirtualDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] IntPtr Buffer,
-            [In] uint BufferSize,
-            [Out] uint* BytesWritten);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int OutputTypedDataVirtualDelegate(
-            IntPtr self,
-            [In] DEBUG_OUTCTL OutputControl,
-            [In] ulong Offset,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] DEBUG_TYPEOPTS Flags);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int ReadTypedDataPhysicalDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] IntPtr Buffer,
-            [In] uint BufferSize,
-            [Out] uint* BytesRead);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int WriteTypedDataPhysicalDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] IntPtr Buffer,
-            [In] uint BufferSize,
-            [Out] uint* BytesWritten);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int OutputTypedDataPhysicalDelegate(
-            IntPtr self,
-            [In] DEBUG_OUTCTL OutputControl,
-            [In] ulong Offset,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] DEBUG_TYPEOPTS Flags);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetScopeDelegate(
-            IntPtr self,
-            [Out] ulong* InstructionOffset,
-            [Out] DEBUG_STACK_FRAME* ScopeFrame,
-            [In] IntPtr ScopeContext,
-            [In] uint ScopeContextSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetScopeDelegate(
-            IntPtr self,
-            [In] ulong InstructionOffset,
-            [In] ref DEBUG_STACK_FRAME ScopeFrame,
-            [In] IntPtr ScopeContext,
-            [In] uint ScopeContextSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int ResetScopeDelegate(
-            IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetScopeSymbolGroupDelegate(
-            IntPtr self,
-            [In] DEBUG_SCOPE_GROUP Flags,
-            [In][MarshalAs(UnmanagedType.Interface)] IDebugSymbolGroup Update,
-            [Out] IntPtr Symbols);            // out IDebugSymbolGroup
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int CreateSymbolGroupDelegate(
-            IntPtr self,
-            [Out] IntPtr Group);              // out IDebugSymbolGroup
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int StartSymbolMatchDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Pattern,
-            [Out] ulong* Handle);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetNextSymbolMatchDelegate(
-            IntPtr self,
-            [In] ulong Handle,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* MatchSize,
-            [Out] ulong* Offset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int EndSymbolMatchDelegate(
-            IntPtr self,
-            [In] ulong Handle);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int ReloadDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Module);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolPathDelegate(
-            IntPtr self,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* PathSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetSymbolPathDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Path);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AppendSymbolPathDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Addition);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetImagePathDelegate(
-            IntPtr self,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* PathSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetImagePathDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Path);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AppendImagePathDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Addition);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourcePathDelegate(
-            IntPtr self,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* PathSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourcePathElementDelegate(
-            IntPtr self,
-            [In] uint Index,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* ElementSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetSourcePathDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Path);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AppendSourcePathDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Addition);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int FindSourceFileDelegate(
-            IntPtr self,
-            [In] uint StartElement,
-            [In][MarshalAs(UnmanagedType.LPStr)] string File,
-            [In] DEBUG_FIND_SOURCE Flags,
-            [Out] uint* FoundElement,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] uint BufferSize,
-            [Out] uint* FoundSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceFileLineOffsetsDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string File,
-            [Out] ulong* Buffer,
-            [In] int BufferLines,
-            [Out] uint* FileLines);
-
-        #endregion
-
-        #region IDebugSymbols2 Delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleVersionInformationDelegate(
-            IntPtr self,
-            [In] uint Index,
-            [In] ulong Base,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Item,
-            [Out] byte* Buffer,
-            [In] uint BufferSize,
-            [Out] uint* VerInfoSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleNameStringDelegate(
-            IntPtr self,
-            [In] DEBUG_MODNAME Which,
-            [In] uint Index,
-            [In] ulong Base,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] uint BufferSize,
-            [Out] uint* NameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetConstantNameDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] ulong Value,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* NameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetFieldNameDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] uint FieldIndex,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* NameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetTypeOptionsDelegate(
-            IntPtr self,
-            [Out] DEBUG_TYPEOPTS* Options);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AddTypeOptionsDelegate(
-            IntPtr self,
-            [In] DEBUG_TYPEOPTS Options);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int RemoveTypeOptionsDelegate(
-            IntPtr self,
-            [In] DEBUG_TYPEOPTS Options);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetTypeOptionsDelegate(
-            IntPtr self,
-            [In] DEBUG_TYPEOPTS Options);
-
-        #endregion
-
-        #region IDebugSymbols3 Delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetNameByOffsetWideDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder NameBuffer,
-            [In] uint NameBufferSize,
-            [Out] uint* NameSize,
-            [Out] ulong* Displacement);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetOffsetByNameWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Symbol,
-            [Out] ulong* Offset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetNearNameByOffsetWideDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] int Delta,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder NameBuffer,
-            [In] int NameBufferSize,
-            [Out] uint* NameSize,
-            [Out] ulong* Displacement);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetLineByOffsetWideDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [Out] uint* Line,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder FileBuffer,
-            [In] int FileBufferSize,
-            [Out] uint* FileSize,
-            [Out] ulong* Displacement);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetOffsetByLineWideDelegate(
-            IntPtr self,
-            [In] uint Line,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string File,
-            [Out] ulong* Offset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleByModuleNameWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Name,
-            [In] uint StartIndex,
-            [Out] uint* Index,
-            [Out] ulong* Base);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolModuleWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Symbol,
-            [Out] ulong* Base);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetTypeNameWideDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder NameBuffer,
-            [In] int NameBufferSize,
-            [Out] uint* NameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetTypeIdWideDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Name,
-            [Out] uint* TypeId);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetFieldOffsetWideDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Field,
-            [Out] uint* Offset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolTypeIdWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Symbol,
-            [Out] uint* TypeId,
-            [Out] ulong* Module);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetScopeSymbolGroup2Delegate(
-            IntPtr self,
-            [In] DEBUG_SCOPE_GROUP Flags,
-            [In][MarshalAs(UnmanagedType.Interface)] IDebugSymbolGroup2 Update,
-            [Out] IntPtr Symbols);            // out IDebugSymbolGroup2
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int CreateSymbolGroup2Delegate(
-            IntPtr self,
-            [Out] IntPtr Group);              // out IDebugSymbolGroup2
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int StartSymbolMatchWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Pattern,
-            [Out] ulong* Handle);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetNextSymbolMatchWideDelegate(
-            IntPtr self,
-            [In] ulong Handle,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* MatchSize,
-            [Out] ulong* Offset);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int ReloadWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Module);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolPathWideDelegate(
-            IntPtr self,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* PathSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetSymbolPathWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Path);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AppendSymbolPathWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Addition);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetImagePathWideDelegate(
-            IntPtr self,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* PathSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetImagePathWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Path);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AppendImagePathWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Addition);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourcePathWideDelegate(
-            IntPtr self,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* PathSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourcePathElementWideDelegate(
-            IntPtr self,
-            [In] uint Index,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* ElementSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetSourcePathWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Path);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AppendSourcePathWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Addition);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int FindSourceFileWideDelegate(
-            IntPtr self,
-            [In] uint StartElement,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string File,
-            [In] DEBUG_FIND_SOURCE Flags,
-            [Out] uint* FoundElement,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] uint BufferSize,
-            [Out] uint* FoundSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceFileLineOffsetsWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string File,
-            [Out] ulong* Buffer,
-            [In] int BufferLines,
-            [Out] uint* FileLines);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleVersionInformationWideDelegate(
-            IntPtr self,
-            [In] uint Index,
-            [In] ulong Base,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Item,
-            [In] IntPtr Buffer,
-            [In] int BufferSize,
-            [Out] uint* VerInfoSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleNameStringWideDelegate(
-            IntPtr self,
-            [In] DEBUG_MODNAME Which,
-            [In] uint Index,
-            [In] ulong Base,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* NameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetConstantNameWideDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] ulong Value,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* NameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetFieldNameWideDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint TypeId,
-            [In] uint FieldIndex,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* NameSize);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int IsManagedModuleDelegate(
-            IntPtr self,
-            [In] uint Index,
-            [In] ulong Base
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleByModuleName2Delegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Name,
-            [In] uint StartIndex,
-            [In] DEBUG_GETMOD Flags,
-            [Out] uint* Index,
-            [Out] ulong* Base
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleByModuleName2WideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Name,
-            [In] uint StartIndex,
-            [In] DEBUG_GETMOD Flags,
-            [Out] uint* Index,
-            [Out] ulong* Base
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetModuleByOffset2Delegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] uint StartIndex,
-            [In] DEBUG_GETMOD Flags,
-            [Out] uint* Index,
-            [Out] ulong* Base
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AddSyntheticModuleDelegate(
-            IntPtr self,
-            [In] ulong Base,
-            [In] uint Size,
-            [In][MarshalAs(UnmanagedType.LPStr)] string ImagePath,
-            [In][MarshalAs(UnmanagedType.LPStr)] string ModuleName,
-            [In] DEBUG_ADDSYNTHMOD Flags
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AddSyntheticModuleWideDelegate(
-            IntPtr self,
-            [In] ulong Base,
-            [In] uint Size,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string ImagePath,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string ModuleName,
-            [In] DEBUG_ADDSYNTHMOD Flags
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int RemoveSyntheticModuleDelegate(
-            IntPtr self,
-            [In] ulong Base
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetCurrentScopeFrameIndexDelegate(
-            IntPtr self,
-            [Out] uint* Index
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetScopeFrameByIndexDelegate(
-            IntPtr self,
-            [In] uint Index
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetScopeFromJitDebugInfoDelegate(
-            IntPtr self,
-            [In] uint OutputControl,
-            [In] ulong InfoOffset
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int SetScopeFromStoredEventDelegate(
-            IntPtr self
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int OutputSymbolByOffsetDelegate(
-            IntPtr self,
-            [In] uint OutputControl,
-            [In] DEBUG_OUTSYM Flags,
-            [In] ulong Offset
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetFunctionEntryByOffsetDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] DEBUG_GETFNENT Flags,
-            [In] IntPtr Buffer,
-            [In] uint BufferSize,
-            [Out] uint* BufferNeeded
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetFieldTypeAndOffsetDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint ContainerTypeId,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Field,
-            [Out] uint* FieldTypeId,
-            [Out] uint* Offset
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetFieldTypeAndOffsetWideDelegate(
-            IntPtr self,
-            [In] ulong Module,
-            [In] uint ContainerTypeId,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Field,
-            [Out] uint* FieldTypeId,
-            [Out] uint* Offset
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AddSyntheticSymbolDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] uint Size,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Name,
-            [In] DEBUG_ADDSYNTHSYM Flags,
-            [Out] DEBUG_MODULE_AND_ID* Id
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int AddSyntheticSymbolWideDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] uint Size,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Name,
-            [In] DEBUG_ADDSYNTHSYM Flags,
-            [Out] DEBUG_MODULE_AND_ID* Id
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int RemoveSyntheticSymbolDelegate(
-            IntPtr self,
-            [In] DEBUG_MODULE_AND_ID* Id
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntriesByOffsetDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] uint Flags,
-            [Out] DEBUG_MODULE_AND_ID* Ids,
-            [Out] ulong* Displacements,
-            [In] uint IdsCount,
-            [Out] uint* Entries
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntriesByNameDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPStr)] string Symbol,
-            [In] uint Flags,
-            [Out] DEBUG_MODULE_AND_ID* Ids,
-            [In] uint IdsCount,
-            [Out] uint* Entries
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntriesByNameWideDelegate(
-            IntPtr self,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string Symbol,
-            [In] uint Flags,
-            [Out] DEBUG_MODULE_AND_ID* Ids,
-            [In] uint IdsCount,
-            [Out] uint* Entries
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntryByTokenDelegate(
-            IntPtr self,
-            [In] ulong ModuleBase,
-            [In] uint Token,
-            [Out] DEBUG_MODULE_AND_ID* Id
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntryInformationDelegate(
-            IntPtr self,
-            [In] DEBUG_MODULE_AND_ID* Id,
-            [Out] DEBUG_SYMBOL_ENTRY* Info
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntryStringDelegate(
-            IntPtr self,
-            [In] DEBUG_MODULE_AND_ID* Id,
-            [In] uint Which,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* StringSize
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntryStringWideDelegate(
-            IntPtr self,
-            [In] DEBUG_MODULE_AND_ID* Id,
-            [In] uint Which,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* StringSize
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntryOffsetRegionsDelegate(
-            IntPtr self,
-            [In] DEBUG_MODULE_AND_ID* Id,
-            [In] uint Flags,
-            [Out] DEBUG_OFFSET_REGION* Regions,
-            [In] uint RegionsCount,
-            [Out] uint* RegionsAvail
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSymbolEntryBySymbolEntryDelegate(
-            IntPtr self,
-            [In] DEBUG_MODULE_AND_ID* FromId,
-            [In] uint Flags,
-            [Out] DEBUG_MODULE_AND_ID* ToId
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceEntriesByOffsetDelegate(
-            IntPtr self,
-            [In] ulong Offset,
-            [In] uint Flags,
-            [Out] DEBUG_SYMBOL_SOURCE_ENTRY* Entries,
-            [In] uint EntriesCount,
-            [Out] uint* EntriesAvail
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceEntriesByLineDelegate(
-            IntPtr self,
-            [In] uint Line,
-            [In][MarshalAs(UnmanagedType.LPStr)] string File,
-            [In] uint Flags,
-            [Out] DEBUG_SYMBOL_SOURCE_ENTRY* Entries,
-            [In] uint EntriesCount,
-            [Out] uint* EntriesAvail
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceEntriesByLineWideDelegate(
-            IntPtr self,
-            [In] uint Line,
-            [In][MarshalAs(UnmanagedType.LPWStr)] string File,
-            [In] uint Flags,
-            [Out] DEBUG_SYMBOL_SOURCE_ENTRY* Entries,
-            [In] uint EntriesCount,
-            [Out] uint* EntriesAvail
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceEntryStringDelegate(
-            IntPtr self,
-            [In] DEBUG_SYMBOL_SOURCE_ENTRY Entry,
-            [In] uint Which,
-            [Out][MarshalAs(UnmanagedType.LPStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* StringSize
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceEntryStringWideDelegate(
-            IntPtr self,
-            [In] DEBUG_SYMBOL_SOURCE_ENTRY Entry,
-            [In] uint Which,
-            [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder Buffer,
-            [In] int BufferSize,
-            [Out] uint* StringSize
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceEntryOffsetRegionsDelegate(
-            IntPtr self,
-            [In] DEBUG_SYMBOL_SOURCE_ENTRY* Entry,
-            [In] uint Flags,
-            [Out] DEBUG_OFFSET_REGION* Regions,
-            [In] uint RegionsCount,
-            [Out] uint* RegionsAvail
-        );
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetSourceEntryBySourceEntryDelegate(
-            IntPtr self,
-            [In] DEBUG_SYMBOL_SOURCE_ENTRY* FromEntry,
-            [In] uint Flags,
-            [Out] DEBUG_SYMBOL_SOURCE_ENTRY* ToEntry
-        );
-
-        #endregion
+        int IDebugSymbolsGenerated.GetNameByOffset(ulong offset, byte* nameBuffer, uint nameBufferSize, uint* nameSize, ulong* displacement)
+        {
+            StringBuilder nameBufferBuilder = CreateStringBuilder(nameBuffer, nameBufferSize);
+            int result = SOSHost.GetNameByOffset(IntPtr.Zero, offset, nameBufferBuilder, nameBufferSize, nameSize, displacement);
+            CopyStringBuffer(nameBufferBuilder, nameBuffer, nameBufferSize);
+            return result;
+        }
+
+        int IDebugSymbolsGenerated.GetOffsetByName(string symbol, ulong* offset) => NotImplemented;
+        int IDebugSymbolsGenerated.GetNearNameByOffset(ulong offset, int delta, byte* nameBuffer, uint nameBufferSize, uint* nameSize, ulong* displacement) => NotImplemented;
+
+        int IDebugSymbolsGenerated.GetLineByOffset(ulong offset, uint* line, byte* fileBuffer, uint fileBufferSize, uint* fileSize, ulong* displacement)
+        {
+            StringBuilder fileBufferBuilder = CreateStringBuilder(fileBuffer, fileBufferSize);
+            int result = SOSHost.GetLineByOffset(IntPtr.Zero, offset, line, fileBufferBuilder, fileBufferSize, fileSize, displacement);
+            CopyStringBuffer(fileBufferBuilder, fileBuffer, fileBufferSize);
+            return result;
+        }
+
+        int IDebugSymbolsGenerated.GetOffsetByLine(uint line, string file, ulong* offset) => NotImplemented;
+
+        int IDebugSymbolsGenerated.GetNumberModules(out uint loaded, out uint unloaded)
+        {
+            return _soshost.GetNumberModules(IntPtr.Zero, out loaded, out unloaded);
+        }
+
+        int IDebugSymbolsGenerated.GetModuleByIndex(uint index, out ulong @base)
+        {
+            return _soshost.GetModuleByIndex(IntPtr.Zero, index, out @base);
+        }
+
+        int IDebugSymbolsGenerated.GetModuleByModuleName(string name, uint startIndex, uint* index, ulong* @base)
+        {
+            return _soshost.GetModuleByModuleName(IntPtr.Zero, name, startIndex, index, @base);
+        }
+
+        int IDebugSymbolsGenerated.GetModuleByOffset(ulong offset, uint startIndex, uint* index, ulong* @base)
+        {
+            return _soshost.GetModuleByOffset(IntPtr.Zero, offset, startIndex, index, @base);
+        }
+
+        int IDebugSymbolsGenerated.GetModuleNames(uint index, ulong @base, byte* imageNameBuffer, uint imageNameBufferSize, uint* imageNameSize, byte* moduleNameBuffer, uint moduleNameBufferSize, uint* moduleNameSize, byte* loadedImageNameBuffer, uint loadedImageNameBufferSize, uint* loadedImageNameSize)
+        {
+            StringBuilder imageNameBufferBuilder = CreateStringBuilder(imageNameBuffer, imageNameBufferSize);
+            StringBuilder moduleNameBufferBuilder = CreateStringBuilder(moduleNameBuffer, moduleNameBufferSize);
+            StringBuilder loadedImageNameBufferBuilder = CreateStringBuilder(loadedImageNameBuffer, loadedImageNameBufferSize);
+            int result = _soshost.GetModuleNames(IntPtr.Zero, index, @base, imageNameBufferBuilder, imageNameBufferSize, imageNameSize, moduleNameBufferBuilder, moduleNameBufferSize, moduleNameSize, loadedImageNameBufferBuilder, loadedImageNameBufferSize, loadedImageNameSize);
+            CopyStringBuffer(imageNameBufferBuilder, imageNameBuffer, imageNameBufferSize);
+            CopyStringBuffer(moduleNameBufferBuilder, moduleNameBuffer, moduleNameBufferSize);
+            CopyStringBuffer(loadedImageNameBufferBuilder, loadedImageNameBuffer, loadedImageNameBufferSize);
+            return result;
+        }
+
+        int IDebugSymbolsGenerated.GetModuleParameters(uint count, ulong* bases, uint start, DEBUG_MODULE_PARAMETERS* @params)
+        {
+            return _soshost.GetModuleParameters(IntPtr.Zero, count, bases, start, @params);
+        }
+
+        int IDebugSymbolsGenerated.GetSymbolModule(string symbol, ulong* @base) => NotImplemented;
+        int IDebugSymbolsGenerated.GetTypeName(ulong module, uint typeId, byte* nameBuffer, uint nameBufferSize, uint* nameSize) => NotImplemented;
+        int IDebugSymbolsGenerated.GetTypeId(ulong module, string name, uint* typeId) => NotImplemented;
+        int IDebugSymbolsGenerated.GetTypeSize(ulong module, uint typeId, uint* size) => NotImplemented;
+        int IDebugSymbolsGenerated.GetFieldOffset(ulong module, uint typeId, string field, uint* offset) => NotImplemented;
+        int IDebugSymbolsGenerated.GetSymbolTypeId(string symbol, uint* typeId, ulong* module) => NotImplemented;
+        int IDebugSymbolsGenerated.GetOffsetTypeId(ulong offset, uint* typeId, ulong* module) => NotImplemented;
+        int IDebugSymbolsGenerated.ReadTypedDataVirtual(ulong offset, ulong module, uint typeId, byte* buffer, uint bufferSize, uint* bytesRead) => NotImplemented;
+        int IDebugSymbolsGenerated.WriteTypedDataVirtual(ulong offset, ulong module, uint typeId, IntPtr buffer, uint bufferSize, uint* bytesWritten) => NotImplemented;
+        int IDebugSymbolsGenerated.OutputTypedDataVirtual(DEBUG_OUTCTL outputControl, ulong offset, ulong module, uint typeId, DEBUG_TYPEOPTS flags) => NotImplemented;
+        int IDebugSymbolsGenerated.ReadTypedDataPhysical(ulong offset, ulong module, uint typeId, IntPtr buffer, uint bufferSize, uint* bytesRead) => NotImplemented;
+        int IDebugSymbolsGenerated.WriteTypedDataPhysical(ulong offset, ulong module, uint typeId, IntPtr buffer, uint bufferSize, uint* bytesWritten) => NotImplemented;
+        int IDebugSymbolsGenerated.OutputTypedDataPhysical(DEBUG_OUTCTL outputControl, ulong offset, ulong module, uint typeId, DEBUG_TYPEOPTS flags) => NotImplemented;
+        int IDebugSymbolsGenerated.GetScope(ulong* instructionOffset, DEBUG_STACK_FRAME* scopeFrame, IntPtr scopeContext, uint scopeContextSize) => NotImplemented;
+        int IDebugSymbolsGenerated.SetScope(ulong instructionOffset, in DEBUG_STACK_FRAME scopeFrame, IntPtr scopeContext, uint scopeContextSize) => NotImplemented;
+        int IDebugSymbolsGenerated.ResetScope() => NotImplemented;
+        int IDebugSymbolsGenerated.GetScopeSymbolGroup(DEBUG_SCOPE_GROUP flags, IntPtr update, out IntPtr symbols)
+        {
+            symbols = default;
+            return NotImplemented;
+        }
+        int IDebugSymbolsGenerated.CreateSymbolGroup(out IntPtr group)
+        {
+            group = default;
+            return NotImplemented;
+        }
+        int IDebugSymbolsGenerated.StartSymbolMatch(string pattern, ulong* handle) => NotImplemented;
+        int IDebugSymbolsGenerated.GetNextSymbolMatch(ulong handle, byte* buffer, uint bufferSize, uint* matchSize, ulong* offset) => NotImplemented;
+        int IDebugSymbolsGenerated.EndSymbolMatch(ulong handle) => NotImplemented;
+        int IDebugSymbolsGenerated.Reload(string module) => NotImplemented;
+
+        int IDebugSymbolsGenerated.GetSymbolPath(byte* buffer, uint bufferSize, uint* pathSize)
+        {
+            StringBuilder bufferBuilder = CreateStringBuilder(buffer, bufferSize);
+            int result = SOSHost.GetSymbolPath(IntPtr.Zero, bufferBuilder, unchecked((int)bufferSize), pathSize);
+            CopyStringBuffer(bufferBuilder, buffer, bufferSize);
+            return result;
+        }
+
+        int IDebugSymbolsGenerated.SetSymbolPath(string path) => NotImplemented;
+        int IDebugSymbolsGenerated.AppendSymbolPath(string addition) => NotImplemented;
+        int IDebugSymbolsGenerated.GetImagePath(byte* buffer, uint bufferSize, uint* pathSize) => NotImplemented;
+        int IDebugSymbolsGenerated.SetImagePath(string path) => NotImplemented;
+        int IDebugSymbolsGenerated.AppendImagePath(string addition) => NotImplemented;
+        int IDebugSymbolsGenerated.GetSourcePath(byte* buffer, uint bufferSize, uint* pathSize) => NotImplemented;
+        int IDebugSymbolsGenerated.GetSourcePathElement(uint index, byte* buffer, uint bufferSize, uint* elementSize) => NotImplemented;
+        int IDebugSymbolsGenerated.SetSourcePath(string path) => NotImplemented;
+        int IDebugSymbolsGenerated.AppendSourcePath(string addition) => NotImplemented;
+
+        int IDebugSymbolsGenerated.FindSourceFile(uint startElement, string file, DEBUG_FIND_SOURCE flags, uint* foundElement, byte* buffer, uint bufferSize, uint* foundSize)
+        {
+            StringBuilder bufferBuilder = CreateStringBuilder(buffer, bufferSize);
+            int result = SOSHost.FindSourceFile(IntPtr.Zero, startElement, file, flags, foundElement, bufferBuilder, bufferSize, foundSize);
+            CopyStringBuffer(bufferBuilder, buffer, bufferSize);
+            return result;
+        }
+
+        int IDebugSymbolsGenerated.GetSourceFileLineOffsets(string file, ulong* buffer, uint bufferLines, uint* fileLines) => NotImplemented;
+
+        int IDebugSymbols2Generated.GetModuleVersionInformation(uint index, ulong @base, string item, byte* buffer, uint bufferSize, uint* verInfoSize)
+        {
+            return _soshost.GetModuleVersionInformation(IntPtr.Zero, index, @base, item, buffer, bufferSize, verInfoSize);
+        }
+
+        int IDebugSymbols2Generated.GetModuleNameString(DEBUG_MODNAME which, uint index, ulong @base, byte* buffer, uint bufferSize, uint* nameSize) => NotImplemented;
+        int IDebugSymbols2Generated.GetConstantName(ulong module, uint typeId, ulong value, byte* buffer, uint bufferSize, uint* nameSize) => NotImplemented;
+        int IDebugSymbols2Generated.GetFieldName(ulong module, uint typeId, uint fieldIndex, byte* buffer, uint bufferSize, uint* nameSize) => NotImplemented;
+        int IDebugSymbols2Generated.GetTypeOptions(DEBUG_TYPEOPTS* options) => NotImplemented;
+        int IDebugSymbols2Generated.AddTypeOptions(DEBUG_TYPEOPTS options) => NotImplemented;
+        int IDebugSymbols2Generated.RemoveTypeOptions(DEBUG_TYPEOPTS options) => NotImplemented;
+        int IDebugSymbols2Generated.SetTypeOptions(DEBUG_TYPEOPTS options) => NotImplemented;
+
+        int IDebugSymbols3Generated.GetNameByOffsetWide(ulong offset, char* nameBuffer, uint nameBufferSize, uint* nameSize, ulong* displacement)
+        {
+            StringBuilder nameBufferBuilder = CreateStringBuilder(nameBuffer, nameBufferSize);
+            int result = SOSHost.GetNameByOffset(IntPtr.Zero, offset, nameBufferBuilder, nameBufferSize, nameSize, displacement);
+            CopyStringBuffer(nameBufferBuilder, nameBuffer, nameBufferSize);
+            return result;
+        }
+
+        int IDebugSymbols3Generated.GetOffsetByNameWide(string symbol, ulong* offset) => NotImplemented;
+        int IDebugSymbols3Generated.GetNearNameByOffsetWide(ulong offset, int delta, char* nameBuffer, uint nameBufferSize, uint* nameSize, ulong* displacement) => NotImplemented;
+        int IDebugSymbols3Generated.GetLineByOffsetWide(ulong offset, uint* line, char* fileBuffer, uint fileBufferSize, uint* fileSize, ulong* displacement) => NotImplemented;
+        int IDebugSymbols3Generated.GetOffsetByLineWide(uint line, string file, ulong* offset) => NotImplemented;
+
+        int IDebugSymbols3Generated.GetModuleByModuleNameWide(string name, uint startIndex, uint* index, ulong* @base)
+        {
+            return _soshost.GetModuleByModuleName(IntPtr.Zero, name, startIndex, index, @base);
+        }
+
+        int IDebugSymbols3Generated.GetSymbolModuleWide(string symbol, ulong* @base) => NotImplemented;
+        int IDebugSymbols3Generated.GetTypeNameWide(ulong module, uint typeId, char* nameBuffer, uint nameBufferSize, uint* nameSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetTypeIdWide(ulong module, string name, uint* typeId) => NotImplemented;
+        int IDebugSymbols3Generated.GetFieldOffsetWide(ulong module, uint typeId, string field, uint* offset) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolTypeIdWide(string symbol, uint* typeId, ulong* module) => NotImplemented;
+        int IDebugSymbols3Generated.GetScopeSymbolGroup2(DEBUG_SCOPE_GROUP flags, IntPtr update, out IntPtr symbols)
+        {
+            symbols = default;
+            return NotImplemented;
+        }
+        int IDebugSymbols3Generated.CreateSymbolGroup2(out IntPtr group)
+        {
+            group = default;
+            return NotImplemented;
+        }
+        int IDebugSymbols3Generated.StartSymbolMatchWide(string pattern, ulong* handle) => NotImplemented;
+        int IDebugSymbols3Generated.GetNextSymbolMatchWide(ulong handle, char* buffer, uint bufferSize, uint* matchSize, ulong* offset) => NotImplemented;
+        int IDebugSymbols3Generated.ReloadWide(string module) => NotImplemented;
+
+        int IDebugSymbols3Generated.GetSymbolPathWide(char* buffer, uint bufferSize, uint* pathSize)
+        {
+            StringBuilder bufferBuilder = CreateStringBuilder(buffer, bufferSize);
+            int result = SOSHost.GetSymbolPath(IntPtr.Zero, bufferBuilder, unchecked((int)bufferSize), pathSize);
+            CopyStringBuffer(bufferBuilder, buffer, bufferSize);
+            return result;
+        }
+
+        int IDebugSymbols3Generated.SetSymbolPathWide(string path) => NotImplemented;
+        int IDebugSymbols3Generated.AppendSymbolPathWide(string addition) => NotImplemented;
+        int IDebugSymbols3Generated.GetImagePathWide(char* buffer, uint bufferSize, uint* pathSize) => NotImplemented;
+        int IDebugSymbols3Generated.SetImagePathWide(string path) => NotImplemented;
+        int IDebugSymbols3Generated.AppendImagePathWide(string addition) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourcePathWide(char* buffer, uint bufferSize, uint* pathSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourcePathElementWide(uint index, char* buffer, uint bufferSize, uint* elementSize) => NotImplemented;
+        int IDebugSymbols3Generated.SetSourcePathWide(string path) => NotImplemented;
+        int IDebugSymbols3Generated.AppendSourcePathWide(string addition) => NotImplemented;
+
+        int IDebugSymbols3Generated.FindSourceFileWide(uint startElement, string file, DEBUG_FIND_SOURCE flags, uint* foundElement, char* buffer, uint bufferSize, uint* foundSize)
+        {
+            StringBuilder bufferBuilder = CreateStringBuilder(buffer, bufferSize);
+            int result = SOSHost.FindSourceFile(IntPtr.Zero, startElement, file, flags, foundElement, bufferBuilder, bufferSize, foundSize);
+            CopyStringBuffer(bufferBuilder, buffer, bufferSize);
+            return result;
+        }
+
+        int IDebugSymbols3Generated.GetSourceFileLineOffsetsWide(string file, ulong* buffer, uint bufferLines, uint* fileLines) => NotImplemented;
+        int IDebugSymbols3Generated.GetModuleVersionInformationWide(uint index, ulong @base, string item, IntPtr buffer, uint bufferSize, uint* verInfoSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetModuleNameStringWide(DEBUG_MODNAME which, uint index, ulong @base, char* buffer, uint bufferSize, uint* nameSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetConstantNameWide(ulong module, uint typeId, ulong value, char* buffer, uint bufferSize, uint* nameSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetFieldNameWide(ulong module, uint typeId, uint fieldIndex, char* buffer, uint bufferSize, uint* nameSize) => NotImplemented;
+        int IDebugSymbols3Generated.IsManagedModule(uint index, ulong @base) => NotImplemented;
+        int IDebugSymbols3Generated.GetModuleByModuleName2(string name, uint startIndex, DEBUG_GETMOD flags, uint* index, ulong* @base) => NotImplemented;
+        int IDebugSymbols3Generated.GetModuleByModuleName2Wide(string name, uint startIndex, DEBUG_GETMOD flags, uint* index, ulong* @base) => NotImplemented;
+        int IDebugSymbols3Generated.GetModuleByOffset2(ulong offset, uint startIndex, DEBUG_GETMOD flags, uint* index, ulong* @base) => NotImplemented;
+        int IDebugSymbols3Generated.AddSyntheticModule(ulong @base, uint size, string imagePath, string moduleName, DEBUG_ADDSYNTHMOD flags) => NotImplemented;
+        int IDebugSymbols3Generated.AddSyntheticModuleWide(ulong @base, uint size, string imagePath, string moduleName, DEBUG_ADDSYNTHMOD flags) => NotImplemented;
+        int IDebugSymbols3Generated.RemoveSyntheticModule(ulong @base) => NotImplemented;
+        int IDebugSymbols3Generated.GetCurrentScopeFrameIndex(uint* index) => NotImplemented;
+        int IDebugSymbols3Generated.SetScopeFrameByIndex(uint index) => NotImplemented;
+        int IDebugSymbols3Generated.SetScopeFromJitDebugInfo(uint outputControl, ulong infoOffset) => NotImplemented;
+        int IDebugSymbols3Generated.SetScopeFromStoredEvent() => NotImplemented;
+        int IDebugSymbols3Generated.OutputSymbolByOffset(uint outputControl, DEBUG_OUTSYM flags, ulong offset) => NotImplemented;
+        int IDebugSymbols3Generated.GetFunctionEntryByOffset(ulong offset, DEBUG_GETFNENT flags, IntPtr buffer, uint bufferSize, uint* bufferNeeded) => NotImplemented;
+        int IDebugSymbols3Generated.GetFieldTypeAndOffset(ulong module, uint containerTypeId, string field, uint* fieldTypeId, uint* offset) => NotImplemented;
+        int IDebugSymbols3Generated.GetFieldTypeAndOffsetWide(ulong module, uint containerTypeId, string field, uint* fieldTypeId, uint* offset) => NotImplemented;
+        int IDebugSymbols3Generated.AddSyntheticSymbol(ulong offset, uint size, string name, DEBUG_ADDSYNTHSYM flags, DEBUG_MODULE_AND_ID* id) => NotImplemented;
+        int IDebugSymbols3Generated.AddSyntheticSymbolWide(ulong offset, uint size, string name, DEBUG_ADDSYNTHSYM flags, DEBUG_MODULE_AND_ID* id) => NotImplemented;
+        int IDebugSymbols3Generated.RemoveSyntheticSymbol(DEBUG_MODULE_AND_ID* id) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntriesByOffset(ulong offset, uint flags, DEBUG_MODULE_AND_ID* ids, ulong* displacements, uint idsCount, uint* entries) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntriesByName(string symbol, uint flags, DEBUG_MODULE_AND_ID* ids, uint idsCount, uint* entries) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntriesByNameWide(string symbol, uint flags, DEBUG_MODULE_AND_ID* ids, uint idsCount, uint* entries) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntryByToken(ulong moduleBase, uint token, DEBUG_MODULE_AND_ID* id) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntryInformation(DEBUG_MODULE_AND_ID* id, DEBUG_SYMBOL_ENTRY* info) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntryString(DEBUG_MODULE_AND_ID* id, uint which, byte* buffer, uint bufferSize, uint* stringSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntryStringWide(DEBUG_MODULE_AND_ID* id, uint which, char* buffer, uint bufferSize, uint* stringSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntryOffsetRegions(DEBUG_MODULE_AND_ID* id, uint flags, DEBUG_OFFSET_REGION* regions, uint regionsCount, uint* regionsAvail) => NotImplemented;
+        int IDebugSymbols3Generated.GetSymbolEntryBySymbolEntry(DEBUG_MODULE_AND_ID* fromId, uint flags, DEBUG_MODULE_AND_ID* toId) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourceEntriesByOffset(ulong offset, uint flags, DEBUG_SYMBOL_SOURCE_ENTRY* entries, uint entriesCount, uint* entriesAvail) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourceEntriesByLine(uint line, string file, uint flags, DEBUG_SYMBOL_SOURCE_ENTRY* entries, uint entriesCount, uint* entriesAvail) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourceEntriesByLineWide(uint line, string file, uint flags, DEBUG_SYMBOL_SOURCE_ENTRY* entries, uint entriesCount, uint* entriesAvail) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourceEntryString(in DEBUG_SYMBOL_SOURCE_ENTRY entry, uint which, byte* buffer, uint bufferSize, uint* stringSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourceEntryStringWide(in DEBUG_SYMBOL_SOURCE_ENTRY entry, uint which, char* buffer, uint bufferSize, uint* stringSize) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourceEntryOffsetRegions(DEBUG_SYMBOL_SOURCE_ENTRY* entry, uint flags, DEBUG_OFFSET_REGION* regions, uint regionsCount, uint* regionsAvail) => NotImplemented;
+        int IDebugSymbols3Generated.GetSourceEntryBySourceEntry(DEBUG_SYMBOL_SOURCE_ENTRY* fromEntry, uint flags, DEBUG_SYMBOL_SOURCE_ENTRY* toEntry) => NotImplemented;
     }
 }

@@ -123,9 +123,6 @@
             <Option>
               <SetHostRuntime>$(DotNetRoot)/shared/Microsoft.NETCore.App/$(RuntimeFrameworkVersion)</SetHostRuntime>
             </Option>
-            <Option Condition="'$(TargetArchitecture)' != 'arm64'">
-              <SetHostRuntime>-netfx</SetHostRuntime>
-            </Option>
           </Options>
         </Option>
         <!--
@@ -273,7 +270,6 @@
       <BuildProjectRuntime>$(TargetRid)</BuildProjectRuntime>
       <DebugType>full</DebugType>
       <RuntimeSymbolsPath>$(DesktopFrameworkPath)</RuntimeSymbolsPath>
-      <SetHostRuntime>-netfx</SetHostRuntime>
     </Option>
   </Options>
 
@@ -283,7 +279,7 @@
 
   <SOSPath>$(InstallDir)\sos.dll</SOSPath>
   <DotNetDumpHost>$(DotNetRoot)\dotnet.exe</DotNetDumpHost>
-  <DotNetDumpPath>$(ArtifactsDir)\bin\dotnet-dump\$(TargetConfiguration)\$(NetCoreAppMinTargetFramework)\publish\dotnet-dump.dll</DotNetDumpPath>
+  <DotNetDumpPath>$(ArtifactsDir)\bin\dotnet-dump\$(TargetConfiguration)\$(SOSManagedTargetFramework)\publish\dotnet-dump.dll</DotNetDumpPath>
   <DebuggeeDumpOutputRootDir>$(DumpDir)\$(TestProduct)\$(RuntimeFrameworkVersion)\$(BuildProjectFramework)</DebuggeeDumpOutputRootDir>
   <DebuggeeDumpInputRootDir>$(DebuggeeDumpOutputRootDir)</DebuggeeDumpInputRootDir>
 </Configuration>

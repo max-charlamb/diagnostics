@@ -13357,15 +13357,12 @@ DECLARE_API(SetHostRuntime)
 {
     INIT_API_EXT();
 
-    BOOL bNetFx = FALSE;
     BOOL bNetCore = FALSE;
     BOOL bNone = FALSE;
     BOOL bClear = FALSE;
     DWORD_PTR majorRuntimeVersion = 0;
     CMDOption option[] =
     {   // name, vptr, type, hasValue
-        {"-netfx", &bNetFx, COBOOL, FALSE},
-        {"-f", &bNetFx, COBOOL, FALSE},
         {"-netcore", &bNetCore, COBOOL, FALSE},
         {"-c", &bNetCore, COBOOL, FALSE},
         {"-none", &bNone, COBOOL, FALSE},
@@ -13384,7 +13381,7 @@ DECLARE_API(SetHostRuntime)
     }
     HostRuntimeFlavor flavor = HostRuntimeFlavor::NetCore;
     int major = 0, minor = 0;
-    if (narg > 0 || majorRuntimeVersion > 0 || bClear || bNetCore || bNetFx || bNone)
+    if (narg > 0 || majorRuntimeVersion > 0 || bClear || bNetCore || bNone)
     {
         if (IsHostingInitialized())
         {
@@ -13402,10 +13399,6 @@ DECLARE_API(SetHostRuntime)
         else if (bNetCore)
         {
             flavor = HostRuntimeFlavor::NetCore;
-        }
-        else if (bNetFx)
-        {
-            flavor = HostRuntimeFlavor::NetFx;
         }
         major = (int)majorRuntimeVersion;
         if (!SetHostRuntime(flavor, major, minor, hostRuntimeDirectory.data))
@@ -13431,9 +13424,6 @@ exit:
             {
                 ExtOut("Using .NET Core runtime (version %d.%d) to host the managed SOS code\n", major, minor);
             }
-            break;
-        case HostRuntimeFlavor::NetFx:
-            ExtOut("Using desktop .NET Framework runtime to host the managed SOS code\n");
             break;
         default:
             break;

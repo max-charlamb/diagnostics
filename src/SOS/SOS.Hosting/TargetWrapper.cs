@@ -4,31 +4,25 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.Runtime.Utilities;
+using SOS.Hosting.Interop;
 
 namespace SOS.Hosting
 {
     [ServiceExport(Scope = ServiceScope.Target)]
-    public sealed unsafe class TargetWrapper : COMCallableIUnknown, IDisposable
+    [GeneratedComClass]
+    public sealed unsafe partial class TargetWrapper : ITargetGenerated
     {
-        // Must be the same as ITarget::OperatingSystem
-        private enum OperatingSystem
-        {
-            Unknown = 0,
-            Windows = 1,
-            Linux = 2,
-            OSX = 3,
-        }
+        internal Func<IClrmaServiceGenerated> ClrmaServiceFactory { get; set; }
 
-        public static readonly Guid IID_ITarget = new("B4640016-6CA0-468E-BA2C-1FFF28DE7B72");
-
-        public ServiceWrapper ServiceWrapper { get; } = new ServiceWrapper();
-
-        public IntPtr ITarget { get; }
+        internal Func<ISymbolServiceGenerated> SymbolServiceFactory { get; set; }
 
         private readonly ITarget _target;
         private readonly IContextService _contextService;
+        private ISymbolServiceGenerated _symbolServiceWrapper;
+        private IClrmaServiceGenerated _clrmaServiceWrapper;
 
         public TargetWrapper(
             ITarget target,
@@ -38,54 +32,50 @@ namespace SOS.Hosting
         {
             _target = target;
             _contextService = contextService;
-
-            ServiceWrapper.AddServiceWrapper(SymbolServiceWrapper.IID_ISymbolService, () => new SymbolServiceWrapper(symbolService, memoryService));
-
-            VTableBuilder builder = AddInterface(IID_ITarget, validate: false);
-
-            builder.AddMethod(new GetOperatingSystemDelegate(GetOperatingSystem));
-            builder.AddMethod(new HostWrapper.GetServiceDelegate(ServiceWrapper.GetService));
-            builder.AddMethod(new GetRuntimeDelegate(GetRuntime));
-            builder.AddMethod(new FlushDelegate(Flush));
-
-            ITarget = builder.Complete();
-
-            AddRef();
+            SymbolServiceFactory = () => new SymbolServiceWrapper(symbolService, memoryService);
         }
 
-        void IDisposable.Dispose()
-        {
-            Trace.TraceInformation("TargetWrapper.Dispose");
-            this.ReleaseWithCheck();
-        }
+        internal ISymbolServiceGenerated GetSymbolService() => _symbolServiceWrapper ??= SymbolServiceFactory();
 
-        protected override void Destroy()
-        {
-            Trace.TraceInformation("TargetWrapper.Destroy");
-            ServiceWrapper.Dispose();
-        }
-
-        private OperatingSystem GetOperatingSystem(
-            IntPtr self)
+        ITargetGenerated.OperatingSystem ITargetGenerated.GetOperatingSystem()
         {
             if (_target.OperatingSystem == OSPlatform.Windows)
             {
-                return OperatingSystem.Windows;
+                return ITargetGenerated.OperatingSystem.Windows;
             }
             else if (_target.OperatingSystem == OSPlatform.Linux)
             {
-                return OperatingSystem.Linux;
+                return ITargetGenerated.OperatingSystem.Linux;
             }
             else if (_target.OperatingSystem == OSPlatform.OSX)
             {
-                return OperatingSystem.OSX;
+                return ITargetGenerated.OperatingSystem.OSX;
             }
-            return OperatingSystem.Unknown;
+            return ITargetGenerated.OperatingSystem.Unknown;
         }
 
-        private int GetRuntime(
-            IntPtr self,
-            IntPtr* ppRuntime)
+        int ITargetGenerated.GetService(in Guid serviceId, out IntPtr service)
+        {
+            service = IntPtr.Zero;
+            if (serviceId == typeof(ISymbolServiceGenerated).GUID && SymbolServiceFactory != null)
+            {
+                _symbolServiceWrapper ??= SymbolServiceFactory();
+                service = (IntPtr)ComInterfaceMarshaller<ISymbolServiceGenerated>.ConvertToUnmanaged(_symbolServiceWrapper);
+                return HResult.S_OK;
+            }
+            else if (serviceId == typeof(IClrmaServiceGenerated).GUID && ClrmaServiceFactory != null)
+            {
+                _clrmaServiceWrapper ??= ClrmaServiceFactory();
+                service = (IntPtr)ComInterfaceMarshaller<IClrmaServiceGenerated>.ConvertToUnmanaged(_clrmaServiceWrapper);
+                return HResult.S_OK;
+            }
+            else
+            {
+                return HResult.E_NOINTERFACE;
+            }
+        }
+
+        int ITargetGenerated.GetRuntime(IntPtr* ppRuntime)
         {
             if (ppRuntime == null)
             {
@@ -100,7 +90,7 @@ namespace SOS.Hosting
                     return HResult.E_NOINTERFACE;
                 }
                 RuntimeWrapper wrapper = runtime.Services.GetService<RuntimeWrapper>();
-                if (wrapper is null)
+                if (wrapper is null || wrapper.IsDisposed)
                 {
                     return HResult.E_NOINTERFACE;
                 }
@@ -114,27 +104,9 @@ namespace SOS.Hosting
             }
         }
 
-        private void Flush(
-            IntPtr self)
+        void ITargetGenerated.Flush()
         {
             _target.Flush();
         }
-
-        #region ITarget delegates
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate OperatingSystem GetOperatingSystemDelegate(
-            [In] IntPtr self);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetRuntimeDelegate(
-            [In] IntPtr self,
-            [Out] IntPtr* ppRuntime);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate void FlushDelegate(
-            [In] IntPtr self);
-
-        #endregion
     }
 }
